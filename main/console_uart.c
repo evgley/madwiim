@@ -99,7 +99,6 @@ static void console_uart_task(void *pvParameters)
     vTaskDelete(NULL);
 }
 
-
 esp_err_t console_uart_init(void)
 {
     esp_err_t ret;

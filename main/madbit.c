@@ -21,5 +21,4 @@ void protocol_send_data(int cmd, uint8_t* data, int dataLen) {
 
 
     ESP_LOG_BUFFER_HEX("TST", buf, offset + dataLen + 1);
-   
 }
