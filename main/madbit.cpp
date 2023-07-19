@@ -9,6 +9,9 @@
 #include "esp_log.h"
 #include "freertos/task.h"
 #include <string.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -17,9 +20,50 @@ extern "C" {
 #include "console_uart.h"
 #include "madbit_protocol.h"
 }
+#include "unistd.h"
 
 #define TAG "MAD"
 #define EXAMPLE_DEVICE_NAME "ESP_SPP_INITIATOR"
+
+extern "C" uint8_t calccrc(void* data,int size);
+
+void protocol_send_data(int cmd, uint8_t* data, int dataLen) {
+    const char* fmt = "[CMD]%c%c";
+    static char buf[255];
+
+    int cmdDataLen = ((dataLen % 4) == 0) ? dataLen : (((dataLen / 4) * 4) + 4);
+
+    int offset = sprintf(buf, fmt, cmd, (char)(cmdDataLen / 4 + 2));
+    memcpy(buf + offset + 1, data, dataLen);
+    buf[offset] = calccrc(buf, offset + dataLen + 1);
+
+
+    ESP_LOG_BUFFER_HEX("TST", buf, offset + dataLen + 1);
+}
+
+
+std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
+    std::vector<uint8_t> res(8 + dataLen);
+    res[0] = '[';
+    res[1] = 'C';
+    res[2] = 'M';
+    res[3] = 'D';
+    res[4] = ']';
+    res[5] = cmd;
+    res[6] = 2 + (((dataLen % 4) == 0) ? dataLen : (((dataLen / 4) * 4) + 4))/4;
+    res[7] = '\0';
+    memcpy(&res[8], data, dataLen);
+
+    res[7] = calccrc(&res[0], res.size());
+
+    protocol_send_data(cmd, data, dataLen);
+    ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_INFO);
+    return res;
+}
+
+std::vector<uint8_t> packetCompose(int cmd) {
+    return packetCompose(cmd, NULL, 0);
+}
 
 #if (SPP_SHOW_MODE == SPP_SHOW_DATA)
 #define SPP_DATA_LEN 8
@@ -30,9 +74,7 @@ static uint8_t spp_data[SPP_DATA_LEN];
 static uint8_t *s_p_data = NULL; /* data pointer of spp_data */
 
 esp_bd_addr_t peer_bd_addr = {0};
-static uint8_t peer_bdname_len;
-static char peer_bdname[ESP_BT_GAP_MAX_BDNAME_LEN + 1];
-static const char remote_device_name[] = "MADBIT_PLAY\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+
 
 static char *bda2str(uint8_t * bda, char *str, size_t size)
 {
@@ -46,51 +88,46 @@ static char *bda2str(uint8_t * bda, char *str, size_t size)
     return str;
 }
 
-static bool get_name_from_eir(uint8_t *eir, char *bdname, uint8_t *bdname_len)
+std::string get_name_from_eir(uint8_t *eir)
 {
-    uint8_t *rmt_bdname = NULL;
+    if (!eir)
+        return {};
+
     uint8_t rmt_bdname_len = 0;
-
-    if (!eir) {
-        return false;
-    }
-
-    rmt_bdname = esp_bt_gap_resolve_eir_data(eir, ESP_BT_EIR_TYPE_CMPL_LOCAL_NAME, &rmt_bdname_len);
+    uint8_t *rmt_bdname = esp_bt_gap_resolve_eir_data(eir, ESP_BT_EIR_TYPE_CMPL_LOCAL_NAME, &rmt_bdname_len);
     if (!rmt_bdname) {
         rmt_bdname = esp_bt_gap_resolve_eir_data(eir, ESP_BT_EIR_TYPE_SHORT_LOCAL_NAME, &rmt_bdname_len);
     }
 
-    if (rmt_bdname) {
-        if (rmt_bdname_len > ESP_BT_GAP_MAX_BDNAME_LEN) {
-            rmt_bdname_len = ESP_BT_GAP_MAX_BDNAME_LEN;
-        }
-
-        if (bdname) {
-            //memcpy(bdname, rmt_bdname, rmt_bdname_len);
-            bdname[rmt_bdname_len] = '\0';
-        }
-        if (bdname_len) {
-            *bdname_len = rmt_bdname_len;
-        }
-        return true;
-    }
-
-    return false;
+    std::string name(reinterpret_cast<char*>(rmt_bdname), std::min<int>(rmt_bdname_len, ESP_BT_GAP_MAX_BDNAME_LEN));
+    return name.c_str();
 }
+
+void readTask(void*) {
+    auto& madbit = Madbit::getInstance();
+    ESP_LOGE("BTREAD", "Task started");
+
+    while (true)
+    {
+        
+        char b[255];
+        int red = read(madbit.fd, b, 255);
+        if (red > 0) {
+            ESP_LOGE(TAG, "RED: %d", red);
+            ESP_LOG_BUFFER_HEXDUMP("BTREAD", b, red, ESP_LOG_INFO);
+        }
+
+        vTaskDelay(10);
+    }
+}
+
 
 void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 {
     uint8_t i = 0;
     char bda_str[18] = {0};
 
-    spp_data[0] = 0x5b;
-    spp_data[1] = 0x43;
-    spp_data[2] = 0x4d;
-    spp_data[3] = 0x44;
-    spp_data[4] = 0x5d;
-    spp_data[5] = 0x29;
-    spp_data[6] = 0x02;
-    spp_data[7] = 0xaf;
+
 
     switch (event) {
     case ESP_SPP_INIT_EVT:
@@ -124,6 +161,8 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             //esp_spp_write(param->open.handle, SPP_DATA_LEN, spp_data);
             //s_p_data = spp_data;
             Madbit::getInstance().fd = param->open.fd;
+            TaskHandle_t taskHandle;
+            xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
             
 
 
@@ -227,17 +266,12 @@ static void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *pa
     switch(event){
     case ESP_BT_GAP_DISC_RES_EVT:
         ESP_LOGI(TAG, "ESP_BT_GAP_DISC_RES_EVT");
-        esp_log_buffer_hex(TAG, param->disc_res.bda, ESP_BD_ADDR_LEN);
         /* Find the target peer device name in the EIR data */
         for (int i = 0; i < param->disc_res.num_prop; i++){
-            if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR
-                && get_name_from_eir(static_cast<uint8_t*>(param->disc_res.prop[i].val), peer_bdname, &peer_bdname_len))
+            if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR)
             {
-                esp_log_buffer_char(TAG, peer_bdname, peer_bdname_len);
-                esp_log_buffer_hex(TAG, peer_bdname, peer_bdname_len);
-                ESP_LOGI(TAG, "!!!!!!!!!!!!!! %d", peer_bdname_len);
-                if (/*strlen(remote_device_name)*/32 == peer_bdname_len
-                    && strncmp(peer_bdname, remote_device_name, peer_bdname_len) == 0) {
+                auto name = get_name_from_eir(static_cast<uint8_t*>(param->disc_res.prop[i].val));
+                if (name == "MADBIT_PLAY") {
                     memcpy(peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN);
                     /* Have found the target peer device, cancel the previous GAP discover procedure. And go on
                      * dsicovering the SPP service on the peer device */
@@ -311,8 +345,6 @@ static void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *pa
 
 Madbit::Madbit(void)
 {
-    protocol_send_cmd(PROTOCOL_CMD_RUX_GET_VOLUME);
-
     esp_err_t ret = ESP_OK;
     char bda_str[18] = {0};
 
@@ -395,30 +427,6 @@ Madbit::Madbit(void)
     esp_bt_gap_set_pin(pin_type, 0, pin_code);
 
     ESP_LOGI(TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
-
-
-    // while (!gDescriptor)
-    // {
-    //     vTaskDelay(10);
-    // }
-    
-
-    // int res = write(gDescriptor, spp_data, SPP_DATA_LEN);
-    // int err = errno;
-    // ESP_LOGE(TAG, "WRITTEN: %d %d", res, errno);
-
-    // while (true)
-    // {
-    //     char b[255];
-    //     int red = read(gDescriptor, b, 255);
-    //     ESP_LOGE(TAG, "RED: %d", red);
-    //     if (red > 0)
-    //         ESP_LOG_BUFFER_HEX("RESULT", b, red);
-
-    //     vTaskDelay(10);
-    // }
-    
-
 }
 
 Madbit& Madbit::getInstance() {
@@ -427,9 +435,57 @@ Madbit& Madbit::getInstance() {
 }
 
 int Madbit::getVolume() {
+
+    char spp_data[8];
+    spp_data[0] = 0x5b;
+    spp_data[1] = 0x43;
+    spp_data[2] = 0x4d;
+    spp_data[3] = 0x44;
+    spp_data[4] = 0x5d;
+    spp_data[5] = 0x29;
+    spp_data[6] = 0x02;
+    spp_data[7] = 0xaf;
+
+    write(fd, spp_data, 8);
+
     return 0;
 }
 
-void setVolume(int newVol) {
+void Madbit::setVolume(int newVol) {
+
+    uint8_t newVolume[4] = {uint8_t(newVol), 0, 0, 0};
+    auto packet = packetCompose(PROTOCOL_CMD_RUX_SET_VOLUME, &newVolume[0], 4);
+   
+    write(fd, &packet[0], packet.size());
+}
+
+void Madbit::decVolume() {
+
+    auto packet = packetCompose(PROTOCOL_CMD_RUX_DEC_VOLUME);
+    
+    write(fd, &packet[0], packet.size());
+}
+
+void Madbit::incVolume() {
+
+    auto packet = packetCompose(PROTOCOL_CMD_RUX_INC_VOLUME);
+    write(fd, &packet[0], packet.size());
+
+//     char spp_data[8];
+//     spp_data[0] = 0x5b;
+//     spp_data[1] = 0x43;
+//     spp_data[2] = 0x4d;
+//     spp_data[3] = 0x44;
+//     spp_data[4] = 0x5d;
+//     spp_data[5] = 0x2a;
+//     spp_data[6] = 0x02;
+//     spp_data[7] = 0xb0;
+//     write(fd, spp_data, 8);
+
+//     // I (18233) DPLY: setInfo
+// // E (18283) MAD: RED: 15
+// // I (18283) RESULT: 2f 43 4d 44 2f 34 32 20 73 69 7a 65 3d 38 0a
+// // E (18383) MAD: RED: 15
+// // I (18383) RESULT: 2f 43 4d 44 2f 34 32 20 73 69 7a 65 3d 38 0a
 
 }

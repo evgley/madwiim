@@ -26,6 +26,8 @@ extern "C" void app_main() {
         if (vol != info.volume) {
             ESP_LOGI(TAG, "Volume changed %d", vol);
 
+            madbit.setVolume(vol);
+
             info.volume = vol;
             display.setInfo(info);
         } else {
