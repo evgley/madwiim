@@ -14,7 +14,7 @@
 extern lv_font_t test_32;
 
 void Display::setInfo(const Info& info) {
-    ESP_LOGI(TAG, "setInfo");
+    ESP_LOGI(TAG, "setInfo %d", info.volume);
     lv_label_set_text_fmt(label, "%d", info.volume);
     lv_refr_now(NULL);
 }

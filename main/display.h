@@ -15,7 +15,7 @@ struct Display {
     Display();
 
     struct Info {
-        int volume;
+        int volume = 0;
     };
     void setInfo(const Info& info);
 
