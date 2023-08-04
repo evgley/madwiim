@@ -1,21 +1,20 @@
 #pragma once
 
-#include "hal/gpio_types.h"
-#include "rotary_encoder.h"
+#include "driver/pulse_cnt.h"
 
 struct Encoder
 {
     struct Config {
         int highLimit;
         int lowLimit;
-        gpio_num_t gpioA;
-        gpio_num_t gpioB;
+        int gpioA;
+        int gpioB;
     };
 
     Encoder(const Config& cfg);
-    QueueHandle_t getEventQueue();
+    int getValue();
 
 private:
-    rotary_encoder_info_t encoder;
     Config cfg;
+    pcnt_unit_handle_t pcntUnit;
 };

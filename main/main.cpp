@@ -1,6 +1,6 @@
 #include "display.h"
-#include "encoder.h"
 #include "madbit.h"
+#include "encoder.h"
 
 #include "esp_task_wdt.h"
 #include "esp_log.h"
@@ -15,6 +15,32 @@
 #define STARTUP_VOLUME 10
 #define MAX_VOLUME 20
 #define MIN_VOLUME 0
+
+class MadWiiM {
+public:
+    MadWiiM(Madbit* madbit, Display* display)
+        : madbit(madbit)
+        , display(display) {
+
+    }
+
+    void incVolume() {
+        ++displayInfo.volume;
+        display->setInfo(displayInfo);
+    }
+
+    void decVolume() {
+        --displayInfo.volume;
+        display->setInfo(displayInfo);
+    }
+
+private:
+    int volume = 0;
+
+    Madbit* madbit;
+    Display* display;
+    Display::Info displayInfo;
+};
 
 static void button_single_click_cb(void *arg,void *usr_data)
 {
@@ -31,27 +57,41 @@ void initButtons() {
             .active_level = 0,
     }};
 
-    button_handle_t gpio_btn = iot_button_create(&gpio_btn_cfg);
-    if(NULL == gpio_btn) {
+    button_handle_t gpio_btn1 = iot_button_create(&gpio_btn_cfg);
+    if(NULL == gpio_btn1) {
         ESP_LOGE(TAG, "Button create failed");
     }
 
-    iot_button_register_cb(gpio_btn, BUTTON_SINGLE_CLICK, button_single_click_cb,NULL);
+    iot_button_register_cb(gpio_btn1, BUTTON_PRESS_DOWN, button_single_click_cb, (void*)1);
+
+    gpio_btn_cfg.gpio_button_config.gpio_num = GPIO_NUM_32;
+    button_handle_t gpio_btn2 = iot_button_create(&gpio_btn_cfg);
+    if(NULL == gpio_btn2) {
+        ESP_LOGE(TAG, "Button create failed");
+    }
+
+    iot_button_register_cb(gpio_btn2, BUTTON_PRESS_DOWN, button_single_click_cb, (void*)2);
+
+    gpio_btn_cfg.gpio_button_config.gpio_num = GPIO_NUM_33;
+    button_handle_t gpio_btn3 = iot_button_create(&gpio_btn_cfg);
+    if(NULL == gpio_btn3) {
+        ESP_LOGE(TAG, "Button create failed");
+    }
+    iot_button_register_cb(gpio_btn3, BUTTON_PRESS_DOWN, button_single_click_cb, (void*)3);
 };
 
 static void _knob_left_cb(void *arg, void *data)
 {
-    Display* display = static_cast<Display*>(data);
-    Display::Info info;
-    info.volume =iot_knob_get_count_value((button_handle_t)arg);
-    display->setInfo(info);
-
-    ESP_LOGI(TAG, "KONB: KONB_LEFT,count_value:%d",iot_knob_get_count_value((button_handle_t)arg));
+    ESP_LOGI(TAG, "KONB: KONB_LEFT");
+    MadWiiM* madwiim = static_cast<MadWiiM*>(data);
+    madwiim->decVolume();
 }
 
 static void _knob_right_cb(void *arg, void *data)
 {
-    ESP_LOGI(TAG, "KONB: KONB_RIGHT,count_value:%d",iot_knob_get_count_value((button_handle_t)arg));
+    ESP_LOGI(TAG, "KONB: KONB_RIGHT");
+    MadWiiM* madwiim = static_cast<MadWiiM*>(data);
+    madwiim->incVolume();
 }
 
 void initEncoder(void* ctx)
@@ -72,20 +112,42 @@ void initEncoder(void* ctx)
 }
 
 extern "C" void app_main() {
-    Display display;
+    Display* display = new Display();
     Madbit& madbit = Madbit::getInstance();
+    MadWiiM* madwiim = new MadWiiM(&madbit, display);
 
     initButtons();
-    initEncoder(&display);
+    //initEncoder(madwiim);
+
+    // while (true) {
+    //     auto a1 = gpio_get_level(GPIO_NUM_5);
+    //     auto a2 = gpio_get_level(GPIO_NUM_19);
+    //     ESP_LOGE(TAG, "GPIO READ: %d %d", a1, a2);
+    // }
 
     
-    // Encoder::Config cfg;
-    // cfg.gpioA = GPIO_NUM_5;
-    // cfg.gpioB = GPIO_NUM_19;
-    // cfg.lowLimit = -100;
-    // cfg.highLimit = 100;
+    Encoder::Config cfg;
+    cfg.gpioA = GPIO_NUM_5;
+    cfg.gpioB = GPIO_NUM_19;
+    cfg.lowLimit = -100;
+    cfg.highLimit = 100;
 
-    // Encoder enc(cfg);
+    int val = 0;
+    Encoder enc(cfg);
+    while (true)
+    {
+        auto newVal = enc.getValue();
+        if (newVal != val) {
+
+            ESP_LOGE(TAG, "NewVal: %d", newVal);
+            val = newVal;
+        }
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+    
+
+
     // auto encoderQueue = enc.getEventQueue();
 
     // int volumeDiff = STARTUP_VOLUME;
