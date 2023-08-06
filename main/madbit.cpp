@@ -161,6 +161,7 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             //esp_spp_write(param->open.handle, SPP_DATA_LEN, spp_data);
             //s_p_data = spp_data;
             Madbit::getInstance().fd = param->open.fd;
+            Madbit::getInstance().connected = true;
             TaskHandle_t taskHandle;
             xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
             
@@ -457,35 +458,4 @@ void Madbit::setVolume(int newVol) {
     auto packet = packetCompose(PROTOCOL_CMD_RUX_SET_VOLUME, &newVolume[0], 4);
    
     write(fd, &packet[0], packet.size());
-}
-
-void Madbit::decVolume() {
-
-    auto packet = packetCompose(PROTOCOL_CMD_RUX_DEC_VOLUME);
-    
-    write(fd, &packet[0], packet.size());
-}
-
-void Madbit::incVolume() {
-
-    auto packet = packetCompose(PROTOCOL_CMD_RUX_INC_VOLUME);
-    write(fd, &packet[0], packet.size());
-
-//     char spp_data[8];
-//     spp_data[0] = 0x5b;
-//     spp_data[1] = 0x43;
-//     spp_data[2] = 0x4d;
-//     spp_data[3] = 0x44;
-//     spp_data[4] = 0x5d;
-//     spp_data[5] = 0x2a;
-//     spp_data[6] = 0x02;
-//     spp_data[7] = 0xb0;
-//     write(fd, spp_data, 8);
-
-//     // I (18233) DPLY: setInfo
-// // E (18283) MAD: RED: 15
-// // I (18283) RESULT: 2f 43 4d 44 2f 34 32 20 73 69 7a 65 3d 38 0a
-// // E (18383) MAD: RED: 15
-// // I (18383) RESULT: 2f 43 4d 44 2f 34 32 20 73 69 7a 65 3d 38 0a
-
 }

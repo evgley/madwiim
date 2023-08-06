@@ -16,6 +16,7 @@ struct Display {
 
     struct Info {
         int volume = 0;
+        bool connected = false;
     };
     void setInfo(const Info& info);
 
