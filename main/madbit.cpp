@@ -454,7 +454,7 @@ int Madbit::getVolume() {
 
 void Madbit::setVolume(int newVol) {
 
-    uint8_t newVolume[4] = {uint8_t(newVol), 0, 0, 0};
+    uint8_t newVolume[4] = {uint8_t(Volume::MAX - newVol), 0, 0, 0};
     auto packet = packetCompose(PROTOCOL_CMD_RUX_SET_VOLUME, &newVolume[0], 4);
    
     write(fd, &packet[0], packet.size());

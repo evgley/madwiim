@@ -7,11 +7,11 @@
 #include "lvgl.h"
 
 
-#ifndef TEST_32
-#define TEST_32 1
+#ifndef FONT_LATO_44
+#define FONT_LATO_44 1
 #endif
 
-#if TEST_32
+#if FONT_LATO_44
 
 /*-----------------
  *    BITMAPS
@@ -220,9 +220,9 @@ static lv_font_fmt_txt_dsc_t font_dsc = {
 
 /*Initialize a public general font descriptor*/
 #if LV_VERSION_CHECK(8, 0, 0)
-const lv_font_t test_32 = {
+const lv_font_t lato_44 = {
 #else
-lv_font_t test_32 = {
+lv_font_t lato_44 = {
 #endif
     .get_glyph_dsc = lv_font_get_glyph_dsc_fmt_txt,    /*Function pointer to get glyph's data*/
     .get_glyph_bitmap = lv_font_get_bitmap_fmt_txt,    /*Function pointer to get glyph's bitmap*/
@@ -240,5 +240,5 @@ lv_font_t test_32 = {
 
 
 
-#endif /*#if TEST_32*/
+#endif /*#if FONT_LATO_44*/
 

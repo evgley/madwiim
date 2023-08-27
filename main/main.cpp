@@ -119,16 +119,16 @@ extern "C" void app_main() {
     cfg.lowLimit = -100;
     cfg.highLimit = 100;
 
-    int val = 0;
     Encoder enc(cfg);
+    int val = enc.getValue();
     while (true)
     {
         auto newVal = enc.getValue();
         if (newVal != val) {
 
             volume += (newVal - val);
-            volume = std::min(volume, 60);
-            volume = std::max(volume, 0);
+            volume = std::min(volume, Madbit::Volume::MAX);
+            volume = std::max(volume, Madbit::Volume::MIN);
 
             madwiim->setVolume(volume);
             val = newVal;
@@ -136,41 +136,4 @@ extern "C" void app_main() {
 
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
-    
-
-
-    // auto encoderQueue = enc.getEventQueue();
-
-    // int volumeDiff = STARTUP_VOLUME;
-    // Display::Info info;
-    // while (true)
-    // {
-    //     auto newVolume = std::max(std::min(info.volume + volumeDiff, MAX_VOLUME), MIN_VOLUME);
-    //     if (newVolume != info.volume)
-    //     {
-    //         info.volume = newVolume;
-    //         display.setInfo(info);
-    //     }
-
-    //     rotary_encoder_event_t event = {};
-    //     if (xQueueReceive(encoderQueue, &event, 1000 / portTICK_PERIOD_MS) == pdTRUE)
-    //     {
-    //         switch (event.state.direction)
-    //         {
-    //         case ROTARY_ENCODER_DIRECTION_CLOCKWISE:
-    //             volumeDiff = 1;
-    //             break;
-    //         case ROTARY_ENCODER_DIRECTION_COUNTER_CLOCKWISE:
-    //             volumeDiff = -1;
-    //             break;
-    //         case ROTARY_ENCODER_DIRECTION_NOT_SET:
-    //             volumeDiff = 0;
-    //             break;
-    //         }
-    //     } else {
-    //         volumeDiff = 0;
-
-    //     }
-    // }
-    
 }

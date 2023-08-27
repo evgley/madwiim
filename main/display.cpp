@@ -11,16 +11,37 @@
 
 #define TAG "DPLY"
 
-extern lv_font_t test_32;
+extern lv_font_t lato_44;
+
+void animate(void* self) {
+    Display* display = static_cast<Display*>(self);
+    while (!display->info.connected)
+    {
+        if (((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2) 
+            lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+        
+        //lv_refr_now(NULL);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+}
 
 void Display::setInfo(const Info& info) {
     ESP_LOGI(TAG, "setInfo %d", info.volume);
-    lv_label_set_text_fmt(label, "%d %d", info.volume, int(info.connected));
+    this->info = info;
+
+    lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
+
+    if (info.connected)
+        lv_obj_clear_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
+    else
+        lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
+
     lv_refr_now(NULL);
 }
 
-Display::Display()
-{
+lv_obj_t* Display::init() {
     i2c_config_t i2c_conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = I2C_MASTER_SDA_IO,
@@ -76,17 +97,32 @@ Display::Display()
             .mirror_x = false,
             .mirror_y = false,
         }};
-    
+
     lv_disp_t* lvDisplay = lvgl_port_add_disp(&disp_cfg);
-    lv_obj_t *scr = lv_disp_get_scr_act(lvDisplay);
+    return lv_disp_get_scr_act(lvDisplay);
+}
+
+void Display::createObjects(lv_obj_t* scr) {
     
-    label = lv_label_create(scr);
-    lv_label_set_text_fmt(label, "%s", buffer); // LV_SYMBOL_WIFI LV_SYMBOL_BLUETOOTH);
+    volumeLabel = lv_label_create(scr);
+
 
     static lv_style_t style;
     lv_style_init(&style);
-    lv_style_set_text_font(&style, &test_32); // <--- you have to enable other font sizes in menuconfig
-    lv_obj_add_style(label, &style, 0);      
+    lv_style_set_text_font(&style, &lato_44); // <--- you have to enable other font sizes in menuconfig
+    lv_obj_add_style(volumeLabel, &style, 0); 
+    lv_obj_set_pos(volumeLabel, 64, 0);
+
+    bluetoothLabel = lv_label_create(scr);
+    lv_label_set_text(bluetoothLabel, LV_SYMBOL_BLUETOOTH);
+}
+
+Display::Display()
+{
+        createObjects(init());
+
+        TaskHandle_t taskHandle;
+        xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);  
 }
 
 extern "C" void init_display()

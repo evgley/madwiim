@@ -21,7 +21,12 @@ struct Display {
     void setInfo(const Info& info);
 
 private:
-    static void updateDisplay(void* pvDisplay);
-    lv_obj_t *label;
-    char buffer[8] = {'0', '0', '\n'};
+    friend void animate(void*);
+
+    lv_obj_t* init();
+    void createObjects(lv_obj_t* scr);
+
+    Info info;
+    lv_obj_t* volumeLabel;
+    lv_obj_t* bluetoothLabel;
 };

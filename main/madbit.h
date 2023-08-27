@@ -5,6 +5,11 @@
 struct Madbit {
     static Madbit& getInstance();
 
+    enum Volume {
+        MAX = 60,
+        MIN = 0
+    };
+
     int getVolume();
     void setVolume(int newVol);
 
