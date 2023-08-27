@@ -127,8 +127,8 @@ extern "C" void app_main() {
         if (newVal != val) {
 
             volume += (newVal - val);
-            volume = std::min(volume, Madbit::Volume::MAX);
-            volume = std::max(volume, Madbit::Volume::MIN);
+            volume = std::min<int>(volume, Madbit::Volume::MAX);
+            volume = std::max<int>(volume, Madbit::Volume::MIN);
 
             madwiim->setVolume(volume);
             val = newVal;
