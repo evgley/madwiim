@@ -22,7 +22,7 @@ public:
         : madbit(madbit)
         , display(display) {
 
-        displayInfo.volume = -1;
+        displayInfo.volume = 0;
         display->setInfo(displayInfo);
     }
 

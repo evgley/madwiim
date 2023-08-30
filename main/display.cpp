@@ -25,6 +25,9 @@ void animate(void* self) {
         //lv_refr_now(NULL);
         vTaskDelay(500 / portTICK_PERIOD_MS);
     }
+
+    lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+    vTaskDelete(NULL);
 }
 
 void Display::setInfo(const Info& info) {
