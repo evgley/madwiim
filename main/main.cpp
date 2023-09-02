@@ -50,7 +50,7 @@ static void button_single_click_cb(void *arg,void *usr_data)
     ESP_LOGI(TAG, "BUTTON_SINGLE_CLICK");
 
     Madbit* madbit = static_cast<Madbit*>(usr_data);
-    madbit->setVolume(30);
+    madbit->getVolume();
 }
 
 void initButtons(void* arg) {
