@@ -107,14 +107,47 @@ void readTask(void*) {
     auto& madbit = Madbit::getInstance();
     ESP_LOGE("BTREAD", "Task started");
 
+    std::string data;
     while (true)
     {
-        
         char b[255];
         int red = read(madbit.fd, b, 255);
         if (red > 0) {
-            ESP_LOGE(TAG, "RED: %d", red);
-            ESP_LOG_BUFFER_HEXDUMP("BTREAD", b, red, ESP_LOG_INFO);
+            ESP_LOG_BUFFER_HEXDUMP("BTREAD", b, red, ESP_LOG_DEBUG);
+            data.append(b, red);
+
+            auto cmdBeginIdx = 0;
+            while ((cmdBeginIdx = data.find("[CMD]")) != std::string::npos)
+            {
+                //ESP_LOG_BUFFER_HEXDUMP("DATA", data.c_str(), data.size(), ESP_LOG_ERROR);
+                //ESP_LOGE(TAG, "CMDF %d %d", cmdBeginIdx, data.size());
+
+                auto cmdLength = data.length() - cmdBeginIdx;
+                if (cmdLength < sizeof(TProtocol))
+                    break;
+
+                auto res = reinterpret_cast<const TProtocol *>(&data[cmdBeginIdx]);
+                auto cmdLengthMust = res->sizediv4 * 4;
+                if (cmdLength < cmdLengthMust)
+                    break;
+
+                std::string line = data.substr(cmdBeginIdx, cmdLengthMust);
+                ESP_LOG_BUFFER_HEXDUMP("BTRESP", line.c_str(), line.size(), ESP_LOG_INFO);
+
+                if (madbit.sendToMessageBufChanged) {
+                    madbit.sendToMessageBufChanged = false;
+                    
+                    if (madbit.sendToMessageBuf) {
+                        xMessageBufferReset(madbit.messageBuf); // remove old messages
+                        ESP_LOGE(TAG, "ERASE MSGBUF");
+                    }
+                }
+
+                if (madbit.sendToMessageBuf)
+                    xMessageBufferSend(madbit.messageBuf, &line[0], cmdLengthMust, portMAX_DELAY);
+                
+                data.erase(0, cmdBeginIdx + cmdLengthMust);
+            }
         }
 
         vTaskDelay(10);
@@ -346,6 +379,9 @@ static void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *pa
 
 Madbit::Madbit(void)
 {
+    constexpr auto messageBufSize = 1000;
+    messageBuf = xMessageBufferCreate(messageBufSize);
+
     esp_err_t ret = ESP_OK;
     char bda_str[18] = {0};
 
@@ -447,8 +483,24 @@ int Madbit::getVolume() {
     spp_data[6] = 0x02;
     spp_data[7] = 0xaf;
 
+    enableNotificationMessages();
+    do {} while (xMessageBufferReset(messageBuf) == pdFAIL); // clear old messages
+
     write(fd, spp_data, 8);
 
+    while (true) {
+        uint8_t buf[128];
+        xMessageBufferReceive(messageBuf, buf, sizeof(buf), portMAX_DELAY);
+        auto msg = reinterpret_cast<TProtocol*>(buf);
+
+        if (msg->cmd == PROTOCOL_CMD_RUX_GET_VOLUME) {
+            auto volume = Volume::MAX - msg->data;
+            ESP_LOGE(TAG, "GetVolume: %d", volume);
+            return volume;
+        }
+    }
+
+    disableNotificationMessages();
     return 0;
 }
 
@@ -458,4 +510,14 @@ void Madbit::setVolume(int newVol) {
     auto packet = packetCompose(PROTOCOL_CMD_RUX_SET_VOLUME, &newVolume[0], 4);
    
     write(fd, &packet[0], packet.size());
+}
+
+void Madbit::enableNotificationMessages() {
+    sendToMessageBuf = true;
+    sendToMessageBufChanged = true;
+}
+
+void Madbit::disableNotificationMessages() {
+    sendToMessageBuf = false;
+    sendToMessageBufChanged = true;
 }
