@@ -19,8 +19,6 @@ public:
         : madbit(madbit)
         , display(display) {
 
-        displayInfo.volume = 0;
-        display->setInfo(displayInfo);
     }
 
     int initVolume() {

@@ -106,15 +106,16 @@ lv_obj_t* Display::init() {
 }
 
 void Display::createObjects(lv_obj_t* scr) {
-    
-    volumeLabel = lv_label_create(scr);
+    lv_obj_clean(scr);
 
+    volumeLabel = lv_label_create(scr);
 
     static lv_style_t style;
     lv_style_init(&style);
     lv_style_set_text_font(&style, &lato_44); // <--- you have to enable other font sizes in menuconfig
     lv_obj_add_style(volumeLabel, &style, 0); 
     lv_obj_set_pos(volumeLabel, 64, 0);
+
 
     bluetoothLabel = lv_label_create(scr);
     lv_label_set_text(bluetoothLabel, LV_SYMBOL_BLUETOOTH);
@@ -123,6 +124,7 @@ void Display::createObjects(lv_obj_t* scr) {
 Display::Display()
 {
         createObjects(init());
+        setInfo({});
 
         TaskHandle_t taskHandle;
         xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);  

@@ -25,19 +25,10 @@ extern "C" {
 #define TAG "MAD"
 #define DEVICE_NAME "MADBIT_ESP32"
 
+#define TARGET_DEVICE_NAME  "MADBIT_PLAY"
+esp_bt_pin_code_t targetPinCode = {'1', '2', '3', '4'};
+
 extern "C" uint8_t calccrc(void* data,int size);
-
-void madbitBuildPacket(int cmd, uint8_t* data, int dataLen) {
-    const char* fmt = "[CMD]%c%c";
-    static char buf[255];
-
-    int cmdDataLen = ((dataLen % 4) == 0) ? dataLen : (((dataLen / 4) * 4) + 4);
-
-    int offset = sprintf(buf, fmt, cmd, (char)(cmdDataLen / 4 + 2));
-    memcpy(buf + offset + 1, data, dataLen);
-    buf[offset] = calccrc(buf, offset + dataLen + 1);
-}
-
 
 std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
     std::vector<uint8_t> res(8 + dataLen);
@@ -53,7 +44,6 @@ std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
 
     res[7] = calccrc(&res[0], res.size());
 
-    madbitBuildPacket(cmd, data, dataLen);
     ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_INFO);
     return res;
 }
@@ -136,7 +126,7 @@ void readTask(void*) {
                     
                     if (madbit.sendToMessageBuf) {
                         xMessageBufferReset(madbit.messageBuf); // remove old messages
-                        ESP_LOGE(TAG, "ERASE MSGBUF");
+                        ESP_LOGD(TAG, "ERASE MSGBUF");
                     }
                 }
 
@@ -298,12 +288,15 @@ static void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *pa
             if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR)
             {
                 auto name = get_name_from_eir(static_cast<uint8_t*>(param->disc_res.prop[i].val));
-                if (name == "MADBIT_PLAY") {
+                if (name == TARGET_DEVICE_NAME) {
                     memcpy(peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN);
                     /* Have found the target peer device, cancel the previous GAP discover procedure. And go on
                      * dsicovering the SPP service on the peer device */
                     esp_bt_gap_cancel_discovery();
-                    ESP_LOGI(TAG, "??????????");
+
+                    char bda_str[18] = {0};
+
+                    ESP_LOGI(TAG, "Target device '%s' found. Bd addr: %s", TARGET_DEVICE_NAME, bda2str(param->disc_res.bda, bda_str, sizeof(bda_str)));
 
                     esp_spp_start_discovery(peer_bd_addr);
                 }
@@ -330,18 +323,10 @@ static void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *pa
     }
     case ESP_BT_GAP_PIN_REQ_EVT:{
         ESP_LOGI(TAG, "ESP_BT_GAP_PIN_REQ_EVT min_16_digit:%d", param->pin_req.min_16_digit);
-        if (param->pin_req.min_16_digit) {
-            ESP_LOGI(TAG, "Input pin code: 0000 0000 0000 0000");
-            esp_bt_pin_code_t pin_code = {0};
-            esp_bt_gap_pin_reply(param->pin_req.bda, true, 16, pin_code);
+        if (!param->pin_req.min_16_digit) {
+            esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, targetPinCode);
         } else {
-            ESP_LOGI(TAG, "Input pin code: 1234");
-            esp_bt_pin_code_t pin_code;
-            pin_code[0] = '1';
-            pin_code[1] = '2';
-            pin_code[2] = '3';
-            pin_code[3] = '4';
-            esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, pin_code);
+            ESP_LOGE(TAG, "Not supported");
         }
         break;
     }
