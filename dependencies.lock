@@ -12,11 +12,11 @@ dependencies:
       type: service
     version: 0.5.1
   espressif/esp_lvgl_port:
-    component_hash: 7a935bb438627f76cb2c28819b1c88489a45abbc92dc4634f5bb034c0cb0bf76
+    component_hash: 11100917e7bc3166b56c6519b61d63b623db9abc8470e5d20439b3b2492477df
     source:
       service_url: https://api.components.espressif.com/
       type: service
-    version: 1.2.0~1
+    version: 1.3.0
   idf:
     component_hash: null
     source:

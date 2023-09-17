@@ -23,11 +23,11 @@ extern "C" {
 #include "unistd.h"
 
 #define TAG "MAD"
-#define EXAMPLE_DEVICE_NAME "ESP_SPP_INITIATOR"
+#define DEVICE_NAME "MADBIT_ESP32"
 
 extern "C" uint8_t calccrc(void* data,int size);
 
-void protocol_send_data(int cmd, uint8_t* data, int dataLen) {
+void madbitBuildPacket(int cmd, uint8_t* data, int dataLen) {
     const char* fmt = "[CMD]%c%c";
     static char buf[255];
 
@@ -36,9 +36,6 @@ void protocol_send_data(int cmd, uint8_t* data, int dataLen) {
     int offset = sprintf(buf, fmt, cmd, (char)(cmdDataLen / 4 + 2));
     memcpy(buf + offset + 1, data, dataLen);
     buf[offset] = calccrc(buf, offset + dataLen + 1);
-
-
-    ESP_LOG_BUFFER_HEX("TST", buf, offset + dataLen + 1);
 }
 
 
@@ -56,7 +53,7 @@ std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
 
     res[7] = calccrc(&res[0], res.size());
 
-    protocol_send_data(cmd, data, dataLen);
+    madbitBuildPacket(cmd, data, dataLen);
     ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_INFO);
     return res;
 }
@@ -160,13 +157,11 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
     uint8_t i = 0;
     char bda_str[18] = {0};
 
-
-
     switch (event) {
     case ESP_SPP_INIT_EVT:
         if (param->init.status == ESP_SPP_SUCCESS) {
             ESP_LOGI(TAG, "ESP_SPP_INIT_EVT");
-            esp_bt_dev_set_device_name(EXAMPLE_DEVICE_NAME);
+            esp_bt_dev_set_device_name(DEVICE_NAME);
             esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
             esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 30, 0);
         } else {
@@ -196,9 +191,7 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             Madbit::getInstance().fd = param->open.fd;
             Madbit::getInstance().connected = true;
             TaskHandle_t taskHandle;
-            xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
-            
-
+            xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);       
 
         } else {
             ESP_LOGE(TAG, "ESP_SPP_OPEN_EVT status:%d", param->open.status);
@@ -353,21 +346,6 @@ static void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *pa
         break;
     }
 
-#if (CONFIG_BT_SSP_ENABLED == true)
-    case ESP_BT_GAP_CFM_REQ_EVT:
-        ESP_LOGI(TAG, "ESP_BT_GAP_CFM_REQ_EVT Please compare the numeric value: %"PRIu32, param->cfm_req.num_val);
-        ESP_LOGW(TAG, "To confirm the value, type `spp ok;`");
-        break;
-    case ESP_BT_GAP_KEY_NOTIF_EVT:
-        ESP_LOGI(TAG, "ESP_BT_GAP_KEY_NOTIF_EVT passkey:%"PRIu32, param->key_notif.passkey);
-        ESP_LOGW(TAG, "Waiting responce...");
-        break;
-    case ESP_BT_GAP_KEY_REQ_EVT:
-        ESP_LOGI(TAG, "ESP_BT_GAP_KEY_REQ_EVT Please enter passkey!");
-        ESP_LOGW(TAG, "To input the key, type `spp key xxxxxx;`");
-        break;
-#endif
-
     case ESP_BT_GAP_MODE_CHG_EVT:
         ESP_LOGI(TAG, "ESP_BT_GAP_MODE_CHG_EVT mode:%d", param->mode_chg.mode);
         break;
@@ -382,14 +360,7 @@ Madbit::Madbit(void)
     constexpr auto messageBufSize = 1000;
     messageBuf = xMessageBufferCreate(messageBufSize);
 
-    esp_err_t ret = ESP_OK;
-    char bda_str[18] = {0};
-
-    // for (int i = 0; i < SPP_DATA_LEN; ++i) {
-    //     spp_data[i] = i;
-    // }
-
-    ret = nvs_flash_init();
+    esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
@@ -397,7 +368,6 @@ Madbit::Madbit(void)
     ESP_ERROR_CHECK( ret );
 
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
-
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     if ((ret = esp_bt_controller_init(&bt_cfg)) != ESP_OK) {
         ESP_LOGE(TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret));
@@ -424,17 +394,6 @@ Madbit::Madbit(void)
         return;
     }
 
-#if (CONFIG_BT_SSP_ENABLED == true)
-    /* Set default parameters for Secure Simple Pairing */
-    esp_bt_sp_param_t param_type = ESP_BT_SP_IOCAP_MODE;
-    esp_bt_io_cap_t iocap = ESP_BT_IO_CAP_IN;
-    esp_bt_gap_set_security_param(param_type, &iocap, sizeof(uint8_t));
-    if (iocap == ESP_BT_IO_CAP_IN || iocap == ESP_BT_IO_CAP_IO) {
-        console_uart_init();
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-#endif
-
     if ((ret = esp_spp_register_callback(esp_spp_cb)) != ESP_OK) {
         ESP_LOGE(TAG, "%s spp register failed: %s", __func__, esp_err_to_name(ret));
         return;
@@ -455,14 +414,11 @@ Madbit::Madbit(void)
         return;
     }
 
-    /*
-     * Set default parameters for Legacy Pairing
-     * Use variable pin, input pin code when pairing
-     */
     esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
     esp_bt_pin_code_t pin_code;
     esp_bt_gap_set_pin(pin_type, 0, pin_code);
 
+    char bda_str[18] = {0};
     ESP_LOGI(TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
 }
 
@@ -495,7 +451,7 @@ int Madbit::getVolume() {
 
         if (msg->cmd == PROTOCOL_CMD_RUX_GET_VOLUME) {
             auto volume = Volume::MAX - msg->data;
-            ESP_LOGE(TAG, "GetVolume: %d", volume);
+            ESP_LOGI(TAG, "GetVolume: %d", volume);
             return volume;
         }
     }

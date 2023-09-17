@@ -12,9 +12,6 @@
 #include <algorithm>
 
 #define TAG "APP"
-#define STARTUP_VOLUME 10
-#define MAX_VOLUME 20
-#define MIN_VOLUME 0
 
 class MadWiiM {
 public:
@@ -24,6 +21,14 @@ public:
 
         displayInfo.volume = 0;
         display->setInfo(displayInfo);
+    }
+
+    int initVolume() {
+        int vol = madbit->getVolume();
+        displayInfo.volume = vol;
+        display->setInfo(displayInfo);
+
+        return vol;
     }
 
     void setVolume(int vol) {
@@ -102,22 +107,13 @@ extern "C" void app_main() {
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     
-
     initButtons(&madbit);
-    //initEncoder(madwiim);
 
-    // while (true) {
-    //     auto a1 = gpio_get_level(GPIO_NUM_5);
-    //     auto a2 = gpio_get_level(GPIO_NUM_19);
-    //     ESP_LOGE(TAG, "GPIO READ: %d %d", a1, a2);
-    // }
-
-    int volume = 30;
+    int volume = madwiim->initVolume();
+    
     Encoder::Config cfg;
     cfg.gpioA = GPIO_NUM_5;
     cfg.gpioB = GPIO_NUM_19;
-    cfg.lowLimit = -100;
-    cfg.highLimit = 100;
 
     Encoder enc(cfg);
     int val = enc.getValue();

@@ -5,8 +5,6 @@
 struct Encoder
 {
     struct Config {
-        int highLimit;
-        int lowLimit;
         int gpioA;
         int gpioB;
     };
