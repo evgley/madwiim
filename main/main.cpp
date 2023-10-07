@@ -1,8 +1,6 @@
-#include "bluetooth.h"
 #include "display.h"
 #include "madbit.h"
 #include "encoder.h"
-#include "hid_device.h"
 
 #include "esp_task_wdt.h"
 #include "esp_log.h"
@@ -93,12 +91,6 @@ void initButtons(void* arg) {
 
 extern "C" void app_main() {
     Display* display = new Display();
-    
-    Bluetooth& bluetooth = Bluetooth::getInstance();
-    // Bluetooth::DeviceAddress hidTargetDevice{0x80, 0x39, 0x8c, 0xa8, 0x4d, 0x5f};
-    // bluetooth.addConnection(hidTargetDevice);
-
-    HidDevice hidDevice;
 
     Madbit& madbit = Madbit::getInstance();
     MadWiiM* madwiim = new MadWiiM(&madbit, display);
