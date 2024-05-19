@@ -23,8 +23,13 @@ public:
 
     int initVolume() {
         int vol = madbit->getVolume();
+        
+        madbit->getSource();
+        
         displayInfo.volume = vol;
         display->setInfo(displayInfo);
+
+
 
         return vol;
     }
@@ -53,7 +58,7 @@ static void button_single_click_cb(void *arg,void *usr_data)
     ESP_LOGI(TAG, "BUTTON_SINGLE_CLICK");
 
     Madbit* madbit = static_cast<Madbit*>(usr_data);
-    madbit->getVolume();
+    madbit->reboot();
 }
 
 void initButtons(void* arg) {
