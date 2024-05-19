@@ -1,11 +1,11 @@
 ## IDF Component Manager Manifest File
 dependencies:
   espressif/button: "^3.2.0"
-  espressif/esp_lvgl_port: "^1.2.0"
-  lvgl/lvgl: "^8.3.8"
+  espressif/esp_lvgl_port: "^2.1.0"
+  lvgl/lvgl: "^9.1.0"
   ## Required IDF version
   idf:
-    version: ">=4.1.0"
+    version: "^5.2.1"
   # # Put list of dependencies here
   # # For components maintained by Espressif:
   # component: "~1.0.0"
