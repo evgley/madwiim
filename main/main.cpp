@@ -1,6 +1,8 @@
 #include "display.h"
 #include "madbit.h"
 #include "encoder.h"
+#include "init.h"
+#include "nvs_flash.h"
 
 #include "esp_task_wdt.h"
 #include "esp_log.h"
@@ -57,8 +59,8 @@ static void button_single_click_cb(void *arg,void *usr_data)
 {
     ESP_LOGI(TAG, "BUTTON_SINGLE_CLICK");
 
-    Madbit* madbit = static_cast<Madbit*>(usr_data);
-    madbit->reboot();
+    //Madbit* madbit = static_cast<Madbit*>(usr_data);
+    //madbit->reboot();
 }
 
 void initButtons(void* arg) {
@@ -95,10 +97,28 @@ void initButtons(void* arg) {
 };
 
 extern "C" void app_main() {
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+
     Display* display = new Display();
+    {
+        gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);
+        gpio_pullup_en(GPIO_NUM_18);
+        auto forceReinit = !gpio_get_level(GPIO_NUM_18);
+        ESP_LOGE(TAG, "FORCE REINIT: %d", forceReinit);
+
+        ensure_initialized(*display, forceReinit);
+        Display::Info info;
+        info.initialized = true;
+        display->setInfo(info);
+    }
 
     Madbit& madbit = Madbit::getInstance();
     MadWiiM* madwiim = new MadWiiM(&madbit, display);
+    initButtons(&madbit);
 
     while (true)
     {
@@ -110,7 +130,6 @@ extern "C" void app_main() {
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     
-    initButtons(&madbit);
 
     int volume = madwiim->initVolume();
     

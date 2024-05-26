@@ -17,6 +17,7 @@ extern lv_font_t lato_44;
 
 void animate(void* self) {
     Display* display = static_cast<Display*>(self);
+    
     while (!display->info.connected)
     {
         if (((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2) 
@@ -36,6 +37,7 @@ void Display::setInfo(const Info& info) {
     ESP_LOGI(TAG, "setInfo %d", info.volume);
     this->info = info;
 
+    lv_label_set_text(customLabel, info.initialized ? "" : "INIT");
     lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
 
     if (info.connected)
@@ -44,6 +46,11 @@ void Display::setInfo(const Info& info) {
         lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
 
     lv_refr_now(NULL);
+
+    if (info.initialized) {
+        TaskHandle_t taskHandle;
+        xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);
+    }
 }
 
 lv_obj_t* Display::init() {
@@ -110,6 +117,7 @@ lv_obj_t* Display::init() {
 void Display::createObjects(lv_obj_t* scr) {
     lv_obj_clean(scr);
 
+    customLabel = lv_label_create(scr);
     volumeLabel = lv_label_create(scr);
 
     static lv_style_t style;
@@ -121,15 +129,13 @@ void Display::createObjects(lv_obj_t* scr) {
 
     bluetoothLabel = lv_label_create(scr);
     lv_label_set_text(bluetoothLabel, LV_SYMBOL_BLUETOOTH);
+    lv_obj_add_flag(bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
 }
 
 Display::Display()
 {
         createObjects(init());
         setInfo({});
-
-        TaskHandle_t taskHandle;
-        xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);  
 }
 
 extern "C" void init_display()

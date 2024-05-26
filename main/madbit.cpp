@@ -21,6 +21,7 @@ extern "C" {
 #include "madbit_protocol.h"
 }
 #include "unistd.h"
+#include "settings_storage.h"
 
 #define TAG "MAD"
 #define DEVICE_NAME "MADBIT_ESP32"
@@ -284,14 +285,18 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 
 void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
+    ESP_LOGE(TAG, "esp_bt_gap_cb %d", event);
     switch(event){
     case ESP_BT_GAP_DISC_RES_EVT:
-        ESP_LOGV(TAG, "ESP_BT_GAP_DISC_RES_EVT");
         /* Find the target peer device name in the EIR data */
         for (int i = 0; i < param->disc_res.num_prop; i++){
             if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR)
             {
                 auto name = get_name_from_eir(static_cast<uint8_t*>(param->disc_res.prop[i].val));
+                std::string targetBtAddr;
+                //ESP_ERROR_CHECK(SettingsStorage::getInstance().get("btaddr", targetBtAddr));
+                //ESP_LOGE(TAG, "Target addr: %s", targetBtAddr.c_str());
+
                 if (name == TARGET_DEVICE_NAME) {
                     memcpy(peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN);
                     /* Have found the target peer device, cancel the previous GAP discover procedure. And go on
@@ -358,60 +363,22 @@ Madbit::Madbit(void)
 {
     constexpr auto messageBufSize = 1000;
     messageBuf = xMessageBufferCreate(messageBufSize);
-
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
-
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    if ((ret = esp_bt_controller_init(&bt_cfg)) != ESP_OK) {
-        ESP_LOGE(TAG, "%s initialize controller failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    if ((ret = esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT)) != ESP_OK) {
-        ESP_LOGE(TAG, "%s enable controller failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    if ((ret = esp_bluedroid_init()) != ESP_OK) {
-        ESP_LOGE(TAG, "%s initialize bluedroid failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    if ((ret = esp_bluedroid_enable()) != ESP_OK) {
-        ESP_LOGE(TAG, "%s enable bluedroid failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    if ((ret = esp_bt_gap_register_callback(esp_bt_gap_cb)) != ESP_OK) {
-        ESP_LOGE(TAG, "%s gap register failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    if ((ret = esp_spp_register_callback(esp_spp_cb)) != ESP_OK) {
-        ESP_LOGE(TAG, "%s spp register failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
+    ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
+    ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT));
+    ESP_ERROR_CHECK(esp_bluedroid_init());
+    ESP_ERROR_CHECK(esp_bluedroid_enable());
+    ESP_ERROR_CHECK(esp_bt_gap_register_callback(esp_bt_gap_cb));
+    ESP_ERROR_CHECK(esp_spp_register_callback(esp_spp_cb));
 
     esp_spp_cfg_t bt_spp_cfg = {
         .mode = ESP_SPP_MODE_VFS,
         .enable_l2cap_ertm = true,
         .tx_buffer_size = ESP_SPP_MIN_TX_BUFFER_SIZE, /* Only used for ESP_SPP_MODE_VFS mode */
     };
-    if ((ret = esp_spp_enhanced_init(&bt_spp_cfg)) != ESP_OK) {
-        ESP_LOGE(TAG, "%s spp init failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
-
-    if ((ret = esp_spp_vfs_register()) != ESP_OK) {
-        ESP_LOGE(TAG, "%s vfs register failed: %s", __func__, esp_err_to_name(ret));
-        return;
-    }
+    ESP_ERROR_CHECK(esp_spp_enhanced_init(&bt_spp_cfg));
+    ESP_ERROR_CHECK(esp_spp_vfs_register());
 
     esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
     esp_bt_pin_code_t pin_code;
@@ -427,7 +394,7 @@ void Madbit::reconnect(void) {
     targetFound = false;
 
     //esp_bt_gap_cancel_discovery();
-    esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 30, 0);
+    ESP_ERROR_CHECK(esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 30, 0));
 }
 
 template <typename Ret>
