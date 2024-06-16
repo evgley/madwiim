@@ -1,3 +1,0 @@
-[submodule "components/esp32-rotary-encoder"]
-	path = components/esp32-rotary-encoder
-	url = https://github.com/evgley/esp32-rotary-encoder
