@@ -108,7 +108,10 @@ esp_err_t save_init_key_value(const std::string& data) {
     if (delimPos == std::string::npos)
         return ESP_FAIL;
     
-    ESP_LOGE(TAG, "save_init_data %s",  data.c_str());
+    auto dataCopy = data;
+    dataCopy[delimPos] = '\0';
+
+    SettingsStorage::getInstance().set(&dataCopy[0], &dataCopy[delimPos+1]);
     return ESP_OK;
 }
 

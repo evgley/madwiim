@@ -29,6 +29,7 @@ public:
         madbit->getSource();
         
         displayInfo.volume = vol;
+        displayInfo.initialized = true;
         display->setInfo(displayInfo);
 
 

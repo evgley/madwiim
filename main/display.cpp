@@ -38,6 +38,11 @@ void Display::setInfo(const Info& info) {
     this->info = info;
 
     lv_label_set_text(customLabel, info.initialized ? "" : "INIT");
+    if (info.initialized)
+        lv_obj_add_flag(customLabel, LV_OBJ_FLAG_HIDDEN);
+    else
+        lv_obj_clear_flag(customLabel, LV_OBJ_FLAG_HIDDEN);
+
     lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
 
     if (info.connected)

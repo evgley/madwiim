@@ -19,6 +19,7 @@
 extern "C" {
 #include "console_uart.h"
 #include "madbit_protocol.h"
+#include "settings_storage.h"
 }
 #include "unistd.h"
 #include "settings_storage.h"
@@ -61,8 +62,7 @@ std::vector<uint8_t> packetCompose(int cmd) {
 static uint8_t spp_data[SPP_DATA_LEN];
 static uint8_t *s_p_data = NULL; /* data pointer of spp_data */
 
-esp_bd_addr_t peer_bd_addr = {0};
-
+esp_bd_addr_t peer_bd_addr = {0x82, 0x6b, 0x1a, 0x08, 0x20, 0x20};
 
 static char *bda2str(uint8_t * bda, char *str, size_t size)
 {
@@ -153,8 +153,8 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
         if (param->init.status == ESP_SPP_SUCCESS) {
             ESP_LOGI(TAG, "ESP_SPP_INIT_EVT");
             esp_bt_dev_set_device_name(DEVICE_NAME);
-            esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-            esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 30, 0);
+            esp_spp_start_discovery(peer_bd_addr);
+
         } else {
             ESP_LOGE(TAG, "ESP_SPP_INIT_EVT status:%d", param->init.status);
         }
@@ -170,7 +170,7 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             esp_spp_connect(ESP_SPP_SEC_AUTHENTICATE, ESP_SPP_ROLE_MASTER, param->disc_comp.scn[0], peer_bd_addr);
         } else {
             ESP_LOGE(TAG, "ESP_SPP_DISCOVERY_COMP_EVT status=%d", param->disc_comp.status);
-            Madbit::getInstance().reconnect();
+            //Madbit::getInstance().reconnect();
         }
         break;
     case ESP_SPP_OPEN_EVT:
@@ -285,34 +285,36 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 
 void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
-    ESP_LOGE(TAG, "esp_bt_gap_cb %d", event);
+    ESP_LOGV(TAG, "esp_bt_gap_cb %d", event);
     switch(event){
-    case ESP_BT_GAP_DISC_RES_EVT:
-        /* Find the target peer device name in the EIR data */
-        for (int i = 0; i < param->disc_res.num_prop; i++){
-            if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR)
-            {
-                auto name = get_name_from_eir(static_cast<uint8_t*>(param->disc_res.prop[i].val));
-                std::string targetBtAddr;
-                //ESP_ERROR_CHECK(SettingsStorage::getInstance().get("btaddr", targetBtAddr));
-                //ESP_LOGE(TAG, "Target addr: %s", targetBtAddr.c_str());
+    // case ESP_BT_GAP_DISC_RES_EVT:
+    //     /* Find the target peer device name in the EIR data */
+    //     for (int i = 0; i < param->disc_res.num_prop; i++){
+    //         if (param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_EIR)
+    //         {
+    //             auto name = get_name_from_eir(static_cast<uint8_t*>(param->disc_res.prop[i].val));
+    //             std::string targetBtAddr;
+    //             ESP_ERROR_CHECK(SettingsStorage::getInstance().get("btaddr", targetBtAddr));
+    //             ESP_LOGE(TAG, "Target addr: %s", targetBtAddr.c_str());
 
-                if (name == TARGET_DEVICE_NAME) {
-                    memcpy(peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN);
-                    /* Have found the target peer device, cancel the previous GAP discover procedure. And go on
-                     * dsicovering the SPP service on the peer device */
-                    esp_bt_gap_cancel_discovery();
+    //             char bda_str[18] = {0};
+    //             bda2str(param->disc_res.bda, bda_str, sizeof(bda_str));
 
-                    char bda_str[18] = {0};
+    //             if (name == TARGET_DEVICE_NAME) {
+    //                 memcpy(peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN);
+    //                 /* Have found the target peer device, cancel the previous GAP discover procedure. And go on
+    //                  * dsicovering the SPP service on the peer device */
+    //                 esp_bt_gap_cancel_discovery();
 
-                    Madbit::getInstance().targetFound = true;
-                    ESP_LOGI(TAG, "Target device '%s' found. Bd addr: %s", TARGET_DEVICE_NAME, bda2str(param->disc_res.bda, bda_str, sizeof(bda_str)));
 
-                    esp_spp_start_discovery(peer_bd_addr);
-                }
-            }
-        }
-        break;
+    //                 Madbit::getInstance().targetFound = true;
+    //                 ESP_LOGI(TAG, "Target device '%s' found. Bd addr: %s", TARGET_DEVICE_NAME, bda_str);
+
+    //                 esp_spp_start_discovery(peer_bd_addr);
+    //             }
+    //         }
+    //     }
+    //     break;
     case ESP_BT_GAP_DISC_STATE_CHANGED_EVT:
         ESP_LOGI(TAG, "ESP_BT_GAP_DISC_STATE_CHANGED_EVT %d", param->disc_st_chg.state);
 

@@ -23,7 +23,7 @@ esp_err_t SettingsStorage::get(const char* key, std::string& value) {
         return err;
     
     value.resize(size);
-    err = nvs_get_str(storage, key, NULL, &size);
+    err = nvs_get_str(storage, key, &value[0], &size);
     if (err == ESP_OK)
         value.pop_back();
 
