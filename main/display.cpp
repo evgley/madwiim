@@ -80,7 +80,7 @@ lv_obj_t* Display::init() {
         .lcd_param_bits = LCD_CMD_BITS,
     };
     esp_lcd_panel_io_handle_t io_handle;
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c((esp_lcd_i2c_bus_handle_t)I2C_NUM_0, &io_config, &io_handle));
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c_v1(I2C_NUM_0, &io_config, &io_handle));
 
     esp_lcd_panel_handle_t panel_handle = NULL;
     esp_lcd_panel_dev_config_t panel_config = {
