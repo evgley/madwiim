@@ -225,5 +225,6 @@ void ensure_initialized(Display& display, bool force) {
         start_http_server();
 
         ::xSemaphoreTake(initSemaphore, portMAX_DELAY);
-    }
+    } else 
+        esp_wifi_set_mode(WIFI_MODE_NULL);
 }

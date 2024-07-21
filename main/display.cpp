@@ -13,18 +13,16 @@
 
 #define TAG "DPLY"
 
-//#define DUMMY_DISPLAY
+#define DUMMY_DISPLAY
 
 extern lv_font_t lato_44;
 
 void animate(void* self) {
     Display* display = static_cast<Display*>(self);
-    int counter = 0;
     char buf[5];
 
     while (!display->info.connected)
     {
-        lv_label_set_text(display->bluetoothLabel, itoa(counter++, buf, 10));
         if (((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2) 
             lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
         else
