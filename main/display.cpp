@@ -13,13 +13,18 @@
 
 #define TAG "DPLY"
 
+#define DUMMY_DISPLAY
+
 extern lv_font_t lato_44;
 
 void animate(void* self) {
     Display* display = static_cast<Display*>(self);
-    
+    int counter = 0;
+    char buf[5];
+
     while (!display->info.connected)
     {
+        lv_label_set_text(display->bluetoothLabel, itoa(counter++, buf, 10));
         if (((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2) 
             lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
         else
@@ -36,6 +41,8 @@ void animate(void* self) {
 void Display::setInfo(const Info& info) {
     ESP_LOGI(TAG, "setInfo %d", info.volume);
     this->info = info;
+
+#ifndef DUMMY_DISPLAY
 
     lv_label_set_text(customLabel, info.initialized ? "" : "INIT");
     if (info.initialized)
@@ -56,6 +63,7 @@ void Display::setInfo(const Info& info) {
         TaskHandle_t taskHandle;
         xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);
     }
+#endif // DUMMY_DISPLAY
 }
 
 lv_obj_t* Display::init() {
@@ -139,8 +147,10 @@ void Display::createObjects(lv_obj_t* scr) {
 
 Display::Display()
 {
+#ifndef DUMMY_DISPLAY
         createObjects(init());
         setInfo({});
+#endif // DUMMY_DISPLAY
 }
 
 extern "C" void init_display()

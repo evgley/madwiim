@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <array>
+#include <sstream>
 
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -46,7 +48,7 @@ std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
 
     res[7] = calccrc(&res[0], res.size());
 
-    ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_INFO);
+    ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_DEBUG);
     return res;
 }
 
@@ -62,8 +64,6 @@ std::vector<uint8_t> packetCompose(int cmd) {
 static uint8_t spp_data[SPP_DATA_LEN];
 static uint8_t *s_p_data = NULL; /* data pointer of spp_data */
 
-esp_bd_addr_t peer_bd_addr = {0x82, 0x6b, 0x1a, 0x08, 0x20, 0x20};
-
 static char *bda2str(uint8_t * bda, char *str, size_t size)
 {
     if (bda == NULL || str == NULL || size < 18) {
@@ -74,6 +74,29 @@ static char *bda2str(uint8_t * bda, char *str, size_t size)
     sprintf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
             p[0], p[1], p[2], p[3], p[4], p[5]);
     return str;
+}
+
+esp_err_t read_peer_bd_addr(esp_bd_addr_t& res) {
+    std::string targetBtAddr;
+    ESP_ERROR_CHECK(SettingsStorage::getInstance().get("btaddr", targetBtAddr));
+    std::stringstream ss(targetBtAddr);
+    
+    std::string tmp;
+    for (auto& bit : res) {
+        std::getline(ss, tmp, ':');
+        bit = std::stoul(tmp, nullptr, 16);
+
+    }
+        
+    ESP_LOGI(TAG, "Read Peer BD Addr fromSettings: %s parsed: %02x:%02x:%02x:%02x:%02x:%02x", targetBtAddr.c_str(), res[0], res[1], res[2], res[3], res[4], res[5]);
+    return ESP_OK;
+}
+
+esp_bd_addr_t& get_peer_bd_addr() {
+    static esp_bd_addr_t res = {};
+    if (!res[0]) // not initialized
+        read_peer_bd_addr(res);
+    return res;
 }
 
 std::string get_name_from_eir(uint8_t *eir)
@@ -93,7 +116,7 @@ std::string get_name_from_eir(uint8_t *eir)
 
 void readTask(void*) {
     auto& madbit = Madbit::getInstance();
-    ESP_LOGE("BTREAD", "Task started");
+    ESP_LOGV("BTREAD", "Task started");
 
     std::string data;
     while (true)
@@ -120,7 +143,7 @@ void readTask(void*) {
                     break;
 
                 std::string line = data.substr(cmdBeginIdx, cmdLengthMust);
-                ESP_LOG_BUFFER_HEXDUMP("BTRESP", line.c_str(), line.size(), ESP_LOG_INFO);
+                ESP_LOG_BUFFER_HEXDUMP("BTRESP", line.c_str(), line.size(), ESP_LOG_DEBUG);
 
                 if (madbit.sendToMessageBufChanged) {
                     madbit.sendToMessageBufChanged = false;
@@ -153,7 +176,7 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
         if (param->init.status == ESP_SPP_SUCCESS) {
             ESP_LOGI(TAG, "ESP_SPP_INIT_EVT");
             esp_bt_dev_set_device_name(DEVICE_NAME);
-            esp_spp_start_discovery(peer_bd_addr);
+            esp_spp_start_discovery(get_peer_bd_addr());
 
         } else {
             ESP_LOGE(TAG, "ESP_SPP_INIT_EVT status:%d", param->init.status);
@@ -167,10 +190,11 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                          param->disc_comp.service_name[i]);
             }
             /* We only connect to the first found server on the remote SPP acceptor here */
-            esp_spp_connect(ESP_SPP_SEC_AUTHENTICATE, ESP_SPP_ROLE_MASTER, param->disc_comp.scn[0], peer_bd_addr);
+            esp_spp_connect(ESP_SPP_SEC_AUTHENTICATE, ESP_SPP_ROLE_MASTER, param->disc_comp.scn[0], get_peer_bd_addr());
         } else {
             ESP_LOGE(TAG, "ESP_SPP_DISCOVERY_COMP_EVT status=%d", param->disc_comp.status);
-            //Madbit::getInstance().reconnect();
+            esp_spp_start_discovery(get_peer_bd_addr());
+
         }
         break;
     case ESP_SPP_OPEN_EVT:
@@ -395,8 +419,7 @@ void Madbit::reconnect(void) {
     connected = false;
     targetFound = false;
 
-    //esp_bt_gap_cancel_discovery();
-    ESP_ERROR_CHECK(esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, 30, 0));
+    esp_restart();
 }
 
 template <typename Ret>
@@ -441,7 +464,7 @@ int Madbit::getSource() {
 }
 
 int Madbit::getSourceCb(const TProtocol& msg) {
-    ESP_LOGE(TAG, "getSource: %d", msg.data);
+    ESP_LOGI(TAG, "getSource: %d", msg.data);
     return 0;
 }
 
