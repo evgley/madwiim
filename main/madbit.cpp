@@ -412,6 +412,8 @@ Madbit::Madbit(void)
 
     char bda_str[18] = {0};
     ESP_LOGI(TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
+
+    ESP_ERROR_CHECK(esp_bredr_tx_power_set(ESP_PWR_LVL_P9,ESP_PWR_LVL_P9));
 }
 
 void Madbit::reconnect(void) {

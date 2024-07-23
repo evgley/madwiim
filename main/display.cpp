@@ -13,7 +13,7 @@
 
 #define TAG "DPLY"
 
-#define DUMMY_DISPLAY
+//#define DUMMY_DISPLAY
 
 extern lv_font_t lato_44;
 
