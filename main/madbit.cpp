@@ -29,9 +29,6 @@ extern "C" {
 #define TAG "MAD"
 #define DEVICE_NAME "MADBIT_ESP32"
 
-#define TARGET_DEVICE_NAME  "MADBIT_PLAY"
-esp_bt_pin_code_t targetPinCode = {'1', '2', '3', '4'};
-
 extern "C" uint8_t calccrc(void* data,int size);
 
 std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
@@ -88,7 +85,21 @@ esp_err_t read_peer_bd_addr(esp_bd_addr_t& res) {
 
     }
         
-    ESP_LOGI(TAG, "Read Peer BD Addr fromSettings: %s parsed: %02x:%02x:%02x:%02x:%02x:%02x", targetBtAddr.c_str(), res[0], res[1], res[2], res[3], res[4], res[5]);
+    ESP_LOGI(TAG, "Read Peer BD Addr from settings: %s parsed: %02x:%02x:%02x:%02x:%02x:%02x", targetBtAddr.c_str(), res[0], res[1], res[2], res[3], res[4], res[5]);
+    return ESP_OK;
+}
+
+esp_err_t read_peer_pin_code(esp_bt_pin_code_t& res) {
+    std::string targetPinCode;
+    ESP_ERROR_CHECK(SettingsStorage::getInstance().get("btpin", targetPinCode));
+
+    int pin = std::stoi(targetPinCode);
+    for (int i=3; i>=0; i--) {
+        res[i] = pin % 10;
+        pin /= 10;
+    }
+   
+    ESP_LOGI(TAG, "Read Peer PIN Code from settings: %s parsed: %d%d%d%d", targetPinCode.c_str(), res[0], res[1], res[2], res[3]);
     return ESP_OK;
 }
 
@@ -363,11 +374,6 @@ void esp_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
     }
     case ESP_BT_GAP_PIN_REQ_EVT:{
         ESP_LOGI(TAG, "ESP_BT_GAP_PIN_REQ_EVT min_16_digit:%d", param->pin_req.min_16_digit);
-        if (!param->pin_req.min_16_digit) {
-            esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, targetPinCode);
-        } else {
-            ESP_LOGE(TAG, "Not supported");
-        }
         break;
     }
 
@@ -393,6 +399,7 @@ Madbit::Madbit(void)
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
     ESP_ERROR_CHECK(esp_bt_controller_enable(ESP_BT_MODE_CLASSIC_BT));
+    ESP_ERROR_CHECK(esp_bredr_tx_power_set(ESP_PWR_LVL_P9,ESP_PWR_LVL_P9));
     ESP_ERROR_CHECK(esp_bluedroid_init());
     ESP_ERROR_CHECK(esp_bluedroid_enable());
     ESP_ERROR_CHECK(esp_bt_gap_register_callback(esp_bt_gap_cb));
@@ -406,14 +413,13 @@ Madbit::Madbit(void)
     ESP_ERROR_CHECK(esp_spp_enhanced_init(&bt_spp_cfg));
     ESP_ERROR_CHECK(esp_spp_vfs_register());
 
-    esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_VARIABLE;
-    esp_bt_pin_code_t pin_code;
-    esp_bt_gap_set_pin(pin_type, 0, pin_code);
+    esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_FIXED;
+    esp_bt_pin_code_t targetPinCode = {};
+    ESP_ERROR_CHECK(read_peer_pin_code(targetPinCode));
+    esp_bt_gap_set_pin(pin_type, 4, targetPinCode);
 
     char bda_str[18] = {0};
     ESP_LOGI(TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
-
-    ESP_ERROR_CHECK(esp_bredr_tx_power_set(ESP_PWR_LVL_P9,ESP_PWR_LVL_P9));
 }
 
 void Madbit::reconnect(void) {
