@@ -125,7 +125,10 @@ void Display::createObjects(lv_obj_t* scr) {
     lv_obj_clean(scr);
 
     customLabel = lv_label_create(scr);
+    lv_label_set_text(customLabel, "");
+
     volumeLabel = lv_label_create(scr);
+    lv_label_set_text(volumeLabel, "");
 
     static lv_style_t style;
     lv_style_init(&style);
@@ -143,8 +146,6 @@ Display::Display()
 {
 #ifndef DUMMY_DISPLAY
         createObjects(init());
-        setInfo({});
-
         xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &animateTask);
 #endif // DUMMY_DISPLAY
 }
