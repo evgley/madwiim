@@ -28,6 +28,7 @@ extern "C" {
 
 #define TAG "MAD"
 #define DEVICE_NAME "MADBIT_ESP32"
+#define PIN_LENGTH 4
 
 extern "C" uint8_t calccrc(void* data,int size);
 
@@ -93,13 +94,9 @@ esp_err_t read_peer_pin_code(esp_bt_pin_code_t& res) {
     std::string targetPinCode;
     ESP_ERROR_CHECK(SettingsStorage::getInstance().get("btpin", targetPinCode));
 
-    int pin = std::stoi(targetPinCode);
-    for (int i=3; i>=0; i--) {
-        res[i] = pin % 10;
-        pin /= 10;
-    }
-   
-    ESP_LOGI(TAG, "Read Peer PIN Code from settings: %s parsed: %d%d%d%d", targetPinCode.c_str(), res[0], res[1], res[2], res[3]);
+    memcpy(&res[0], &targetPinCode[0], PIN_LENGTH);
+
+    ESP_LOGI(TAG, "Read Peer PIN Code from settings: %s", targetPinCode.c_str());
     return ESP_OK;
 }
 
@@ -186,7 +183,7 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
     case ESP_SPP_INIT_EVT:
         if (param->init.status == ESP_SPP_SUCCESS) {
             ESP_LOGI(TAG, "ESP_SPP_INIT_EVT");
-            esp_bt_dev_set_device_name(DEVICE_NAME);
+            esp_bt_gap_set_device_name(DEVICE_NAME);
             esp_spp_start_discovery(get_peer_bd_addr());
 
         } else {
@@ -416,7 +413,7 @@ Madbit::Madbit(void)
     esp_bt_pin_type_t pin_type = ESP_BT_PIN_TYPE_FIXED;
     esp_bt_pin_code_t targetPinCode = {};
     ESP_ERROR_CHECK(read_peer_pin_code(targetPinCode));
-    esp_bt_gap_set_pin(pin_type, 4, targetPinCode);
+    esp_bt_gap_set_pin(pin_type, PIN_LENGTH, targetPinCode);
 
     char bda_str[18] = {0};
     ESP_LOGI(TAG, "Own address:[%s]", bda2str((uint8_t *)esp_bt_dev_get_address(), bda_str, sizeof(bda_str)));
