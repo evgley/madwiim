@@ -2,4 +2,5 @@ idf_component_register(SRCS "settings_storage.cpp" "main.cpp" "madbit.cpp" "font
                     SRCS "app_spp_msg_prs.c"
                     SRCS "app_spp_msg_set.c"
                     SRCS "console_uart.c"
+                    EMBED_TXTFILES "init.html"
                     INCLUDE_DIRS ".")

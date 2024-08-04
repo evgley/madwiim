@@ -2,6 +2,7 @@
 #include "madbit.h"
 #include "encoder.h"
 #include "init.h"
+#include "settings_storage.h"
 #include "nvs_flash.h"
 
 #include "esp_task_wdt.h"
@@ -109,7 +110,7 @@ extern "C" void app_main() {
         gpio_set_direction(GPIO_NUM_18, GPIO_MODE_INPUT);
         gpio_pullup_en(GPIO_NUM_18);
         auto forceReinit = !gpio_get_level(GPIO_NUM_18);
-        ESP_LOGE(TAG, "FORCE REINIT: %d", forceReinit);
+        ESP_LOGI(TAG, "FORCE REINIT: %d", forceReinit);
 
         ensure_initialized(*display, forceReinit);
         Display::Info info;
@@ -131,6 +132,11 @@ extern "C" void app_main() {
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     
+    auto& settings = SettingsStorage::getInstance();
+    std::string encoderSpeedDivStr;
+    ESP_ERROR_CHECK(settings.get("encoderspeeddiv", encoderSpeedDivStr));
+    auto encoderSpeedDiv = std::stoi(encoderSpeedDivStr);
+    ESP_LOGI(TAG, "Encoder speed divider: %d", encoderSpeedDiv);
 
     int volume = madwiim->initVolume();
     
@@ -144,13 +150,15 @@ extern "C" void app_main() {
     {
         auto newVal = enc.getValue();
         if (newVal != val) {
+            auto volumeDiff = (newVal - val) / encoderSpeedDiv;
+            if (volumeDiff) {
+                volume += volumeDiff;
+                volume = std::min<int>(volume, Madbit::Volume::MAX);
+                volume = std::max<int>(volume, Madbit::Volume::MIN);
 
-            volume += (newVal - val);
-            volume = std::min<int>(volume, Madbit::Volume::MAX);
-            volume = std::max<int>(volume, Madbit::Volume::MIN);
-
-            madwiim->setVolume(volume);
-            val = newVal;
+                madwiim->setVolume(volume);
+                val = newVal;
+            }
         }
 
         vTaskDelay(10 / portTICK_PERIOD_MS);

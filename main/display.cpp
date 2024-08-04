@@ -19,7 +19,6 @@ extern lv_font_t lato_44;
 
 void animate(void* self) {
     Display* display = static_cast<Display*>(self);
-    char buf[5];
 
     while (!display->info.connected)
     {
@@ -58,6 +57,7 @@ void Display::setInfo(const Info& info) {
     lv_refr_now(NULL);
 
     if (info.initialized) {
+        // TODO: seems like a bug to create task every time
         TaskHandle_t taskHandle;
         xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);
     }

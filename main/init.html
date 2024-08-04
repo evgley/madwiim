@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+
+    <h2>Первоначальная настройка MADBIT-ESP</h2>
+
+    <form method="POST">
+        <h3>Подключение</h3>
+        <label for="btaddr">Bluetooth-адрес Madbit:</label><br>
+        <input type="text" name="btaddr" id="btaddr" value="82:6b:1a:08:20:20"><br>
+        <label for="btpin">Pin-код:</label><br>
+        <input type="text" name="btpin" id="btpin" value="1234"><br>
+        <h3>Регулировка громкости</h3>
+        <label for="encoderspeeddiv">Чувствительность энкодера:</label><br>
+        <select name="encoderspeeddiv" id="encoderspeeddiv">
+            <option value="1">Максимальная</option>
+            <option value="2">Средняя</option>
+            <option value="4">Минимальная</option>
+        </select>
+        <br><br>
+        <input type="submit" value="Сохранить">
+    </form>
+    <p>После нажатия на кнопку "Сохранить" пульт будет настроен и перезагружен.</p>
+
+</body>
+
+</html>

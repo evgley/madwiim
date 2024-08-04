@@ -21,6 +21,8 @@ static EventGroupHandle_t s_wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
+extern const char init_html[] asm("_binary_init_html_start");
+
 StaticSemaphore_t initSemaphoreBuffer;
 SemaphoreHandle_t initSemaphore = xSemaphoreCreateBinaryStatic(&initSemaphoreBuffer);
 
@@ -79,27 +81,8 @@ void wifi_init_softap(void)
 
 esp_err_t get_handler(httpd_req_t *req)
 {
-    /* Send a simple response */
-    const char resp[] = \
-"<!DOCTYPE html>"
-"<html>"
-"<body>"
-""
-"<h2>Welcome to MADBIT-ESP init</h2>"
-""
-"<form method=\"POST\">"
-  "<label for=\"btaddr\">Bluetooth-адрес Madbit:</label><br>"
-  "<input type=\"text\" name=\"btaddr\" id=\"btaddr\" value=\"cc:db:a7:6a:14:56\"><br>"
-  "<label for=\"btpin\">Pin-код:</label><br>"
-  "<input type=\"text\" name=\"btpin\" id=\"btpin\" value=\"1234\"><br><br>"
-  "<input type=\"submit\" value=\"Сохранить\">"
-"</form> "
-"<p>После нажатия на кнопку \"Сохранить\" пульт будет настроен и перезагружен.</p>"
-""
-"</body>"
-"</html>";
     httpd_resp_set_type(req, "text/html; charset=\"utf-8\"");
-    httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, init_html, HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -179,7 +162,7 @@ esp_err_t post_handler(httpd_req_t *req)
                 return ESP_FAIL;
         }
     }
-    ESP_LOGE(TAG, "post_handler %s", content.c_str());
+    ESP_LOGI(TAG, "post_handler %s", content.c_str());
     ESP_ERROR_CHECK(save_init_data(url_decode(content)));
     SettingsStorage::getInstance().set(INITIALIZED_KEY, 1);
     
