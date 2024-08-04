@@ -20,19 +20,17 @@ extern lv_font_t lato_44;
 void animate(void* self) {
     Display* display = static_cast<Display*>(self);
 
-    while (!display->info.connected)
+    while (true)
     {
-        if (((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2) 
+        if (display->info.connected || ((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2)
             lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
         else
             lv_obj_add_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
         
-        //lv_refr_now(NULL);
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
     lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
-    vTaskDelete(NULL);
 }
 
 void Display::setInfo(const Info& info) {
@@ -58,8 +56,6 @@ void Display::setInfo(const Info& info) {
 
     if (info.initialized) {
         // TODO: seems like a bug to create task every time
-        TaskHandle_t taskHandle;
-        xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);
     }
 #endif // DUMMY_DISPLAY
 }
@@ -148,6 +144,8 @@ Display::Display()
 #ifndef DUMMY_DISPLAY
         createObjects(init());
         setInfo({});
+
+        xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &animateTask);
 #endif // DUMMY_DISPLAY
 }
 

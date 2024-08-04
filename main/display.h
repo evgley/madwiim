@@ -31,4 +31,6 @@ private:
     lv_obj_t* volumeLabel;
     lv_obj_t* bluetoothLabel;
     lv_obj_t* customLabel;
+
+    TaskHandle_t animateTask;
 };
