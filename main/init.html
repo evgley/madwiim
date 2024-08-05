@@ -10,14 +10,19 @@
         <label for="btaddr">Bluetooth-адрес Madbit:</label><br>
         <input type="text" name="btaddr" id="btaddr" value="82:6b:1a:08:20:20"><br>
         <label for="btpin">Pin-код:</label><br>
-        <input type="text" name="btpin" id="btpin" value="1234"><br>
+        <input type="number" name="btpin" id="btpin" value="1234" min="1000" max="9999"><br>
         <h3>Регулировка громкости</h3>
         <label for="encoderspeeddiv">Чувствительность энкодера:</label><br>
         <select name="encoderspeeddiv" id="encoderspeeddiv">
             <option value="1">Максимальная</option>
             <option value="2">Средняя</option>
             <option value="4">Минимальная</option>
-        </select>
+        </select><br><br>
+        <input type="checkbox" name="setvolumeonboot" id="setvolumeonboot" onclick="document.getElementById('volumeonboot').disabled = !this.checked">
+        <label for="volumeonboot">Установить громкость после загрузки</label><br>
+        <input type="range" id="volumeonboot" name="volumeonboot" min="0" max="60" value="30" step="1" oninput="this.nextElementSibling.value = this.value" disabled/>
+        <output>30</output> 
+
         <br><br>
         <input type="submit" value="Сохранить">
     </form>
