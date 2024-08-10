@@ -30,9 +30,10 @@ public:
         settings.get("setvolumeonboot", shouldSetVolumeOnBoot);
         int vol = 0;
         if (shouldSetVolumeOnBoot == "on") {
-            int8_t volumeOnBoot{};
+            std::string volumeOnBoot;
             ESP_ERROR_CHECK(settings.get("volumeonboot", volumeOnBoot));
-            vol = volumeOnBoot;
+            vol = std::stoi(volumeOnBoot);
+            madbit->setVolume(vol);
         } else
         {
             vol = madbit->getVolume(); 

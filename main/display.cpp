@@ -22,10 +22,18 @@ void animate(void* self) {
 
     while (true)
     {
-        if (display->info.connected || ((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2)
-            lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
-        else
-            lv_obj_add_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+        if (!display->info.initialized) {
+            lv_label_set_text(display->customLabel, "INIT");
+            lv_obj_clear_flag(display->customLabel, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_label_set_text(display->customLabel, "");
+            lv_obj_add_flag(display->customLabel, LV_OBJ_FLAG_HIDDEN);
+        
+            if (display->info.connected || ((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2)
+                lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+            else
+                lv_obj_add_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+        }
         
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
@@ -38,13 +46,6 @@ void Display::setInfo(const Info& info) {
     this->info = info;
 
 #ifndef DUMMY_DISPLAY
-
-    lv_label_set_text(customLabel, info.initialized ? "" : "INIT");
-    if (info.initialized)
-        lv_obj_add_flag(customLabel, LV_OBJ_FLAG_HIDDEN);
-    else
-        lv_obj_clear_flag(customLabel, LV_OBJ_FLAG_HIDDEN);
-
     lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
 
     if (info.connected)
@@ -53,10 +54,6 @@ void Display::setInfo(const Info& info) {
         lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
 
     lv_refr_now(NULL);
-
-    if (info.initialized) {
-        // TODO: seems like a bug to create task every time
-    }
 #endif // DUMMY_DISPLAY
 }
 
