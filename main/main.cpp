@@ -25,15 +25,22 @@ public:
     }
 
     int initVolume() {
-        int vol = madbit->getVolume();
-        
-        madbit->getSource();
+        auto& settings = SettingsStorage::getInstance();
+        std::string shouldSetVolumeOnBoot;
+        settings.get("setvolumeonboot", shouldSetVolumeOnBoot);
+        int vol = 0;
+        if (shouldSetVolumeOnBoot == "on") {
+            int8_t volumeOnBoot{};
+            ESP_ERROR_CHECK(settings.get("volumeonboot", volumeOnBoot));
+            vol = volumeOnBoot;
+        } else
+        {
+            vol = madbit->getVolume(); 
+        }
         
         displayInfo.volume = vol;
         displayInfo.initialized = true;
         display->setInfo(displayInfo);
-
-
 
         return vol;
     }
