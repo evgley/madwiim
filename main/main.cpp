@@ -16,6 +16,12 @@
 
 #define TAG "APP"
 
+
+void refreshTask(void*) {
+    auto& madbit = Madbit::getInstance();
+    ESP_LOGV("BTREFRESH", "Task started");
+}
+
 class MadWiiM {
 public:
     MadWiiM(Madbit* madbit, Display* display)
@@ -24,7 +30,7 @@ public:
 
     }
 
-    int initVolume() {
+    int init() {
         auto& settings = SettingsStorage::getInstance();
         std::string shouldSetVolumeOnBoot;
         settings.get("setvolumeonboot", shouldSetVolumeOnBoot);
@@ -39,9 +45,13 @@ public:
             vol = madbit->getVolume(); 
         }
         
+        displayInfo.source = madbit->getSource();
         displayInfo.volume = vol;
         displayInfo.initialized = true;
         display->setInfo(displayInfo);
+
+        //TaskHandle_t taskHandle;
+        //xTaskCreate(refreshTask, "BTREFRESH", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);       
 
         return vol;
     }
@@ -146,7 +156,7 @@ extern "C" void app_main() {
     auto encoderSpeedDiv = std::stoi(encoderSpeedDivStr);
     ESP_LOGI(TAG, "Encoder speed divider: %d", encoderSpeedDiv);
 
-    int volume = madwiim->initVolume();
+    int volume = madwiim->init();
     
     Encoder::Config cfg;
     cfg.gpioA = GPIO_NUM_5;

@@ -215,8 +215,7 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             Madbit::getInstance().fd = param->open.fd;
             Madbit::getInstance().connected = true;
             TaskHandle_t taskHandle;
-            xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);       
-
+            xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
         } else {
             ESP_LOGE(TAG, "ESP_SPP_OPEN_EVT status:%d", param->open.status);
         }

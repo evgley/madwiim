@@ -16,6 +16,7 @@ struct Display {
 
     struct Info {
         int volume = 0;
+        int source = 0;
         bool connected = false;
         bool initialized = false;
     };
@@ -29,6 +30,8 @@ private:
 
     Info info;
     lv_obj_t* volumeLabel;
+    lv_obj_t* sourceLabel;
+    lv_obj_t* presetLabel;
     lv_obj_t* bluetoothLabel;
     lv_obj_t* customLabel;
 

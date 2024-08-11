@@ -47,11 +47,19 @@ void Display::setInfo(const Info& info) {
 
 #ifndef DUMMY_DISPLAY
     lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
+    lv_label_set_text_fmt(sourceLabel, "%d", info.source);
+    lv_label_set_text_fmt(presetLabel, "%d", info.source);
 
-    if (info.connected)
+    if (info.connected) {
         lv_obj_clear_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
-    else
+        lv_obj_clear_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
+    }
+    else {
         lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
+    }
 
     lv_refr_now(NULL);
 #endif // DUMMY_DISPLAY
@@ -127,12 +135,22 @@ void Display::createObjects(lv_obj_t* scr) {
     volumeLabel = lv_label_create(scr);
     lv_label_set_text(volumeLabel, "");
 
+    sourceLabel = lv_label_create(scr);
+    lv_label_set_text(sourceLabel, "");
+
+    presetLabel = lv_label_create(scr);
+    lv_label_set_text(presetLabel, "");
+
     static lv_style_t style;
     lv_style_init(&style);
     lv_style_set_text_font(&style, &lato_44); // <--- you have to enable other font sizes in menuconfig
     lv_obj_add_style(volumeLabel, &style, 0); 
     lv_obj_set_pos(volumeLabel, 64, 0);
 
+    lv_obj_add_style(sourceLabel, &style, 0); 
+    lv_obj_set_pos(sourceLabel, 32, 0);
+
+    lv_obj_add_style(presetLabel, &style, 0); 
 
     bluetoothLabel = lv_label_create(scr);
     lv_label_set_text(bluetoothLabel, LV_SYMBOL_BLUETOOTH);
