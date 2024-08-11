@@ -40,6 +40,10 @@ esp_err_t SettingsStorage::get(const char* key, int8_t& value) {
     return nvs_get_i8(storage, key, &value);
 }
 
+esp_err_t SettingsStorage::erase() {
+    return nvs_erase_all(storage);
+}
+
 SettingsStorage& SettingsStorage::getInstance() {
     static SettingsStorage ss;
     return ss;

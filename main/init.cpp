@@ -163,6 +163,7 @@ esp_err_t post_handler(httpd_req_t *req)
         }
     }
     ESP_LOGI(TAG, "post_handler %s", content.c_str());
+    SettingsStorage::getInstance().erase();
     ESP_ERROR_CHECK(save_init_data(url_decode(content)));
     SettingsStorage::getInstance().set(INITIALIZED_KEY, 1);
     

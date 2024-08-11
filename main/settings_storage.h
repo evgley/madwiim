@@ -15,6 +15,8 @@ public:
     esp_err_t set(const char* key, int8_t value);
     esp_err_t get(const char* key, int8_t& value);
 
+    esp_err_t erase();
+
     static SettingsStorage& getInstance();
 
 private:
