@@ -17,6 +17,7 @@ struct Display {
     struct Info {
         int volume = 0;
         int source = 0;
+        int preset = 0;
         bool connected = false;
         bool initialized = false;
     };

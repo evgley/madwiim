@@ -17,10 +17,7 @@
 #define TAG "APP"
 
 
-void refreshTask(void*) {
-    auto& madbit = Madbit::getInstance();
-    ESP_LOGV("BTREFRESH", "Task started");
-}
+void refreshTask(void*);
 
 class MadWiiM {
 public:
@@ -30,57 +27,109 @@ public:
 
     }
 
-    int init() {
-        auto& settings = SettingsStorage::getInstance();
-        std::string shouldSetVolumeOnBoot;
-        settings.get("setvolumeonboot", shouldSetVolumeOnBoot);
-        int vol = 0;
-        if (shouldSetVolumeOnBoot == "on") {
-            std::string volumeOnBoot;
-            ESP_ERROR_CHECK(settings.get("volumeonboot", volumeOnBoot));
-            vol = std::stoi(volumeOnBoot);
-            madbit->setVolume(vol);
-        } else
-        {
-            vol = madbit->getVolume(); 
-        }
-        
-        displayInfo.source = madbit->getSource();
-        displayInfo.volume = vol;
+    void init() {
+
+        displayInfo.volume = -1;
+        displayInfo.source = -1;
+        displayInfo.preset = -1;
         displayInfo.initialized = true;
         display->setInfo(displayInfo);
 
-        //TaskHandle_t taskHandle;
-        //xTaskCreate(refreshTask, "BTREFRESH", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);       
+        while (!madbit->connected)
+        {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+        }
 
-        return vol;
+        auto& settings = SettingsStorage::getInstance();
+        std::string shouldSetVolumeOnBoot;
+        settings.get("setvolumeonboot", shouldSetVolumeOnBoot);
+        if (shouldSetVolumeOnBoot == "on") {
+            std::string volumeOnBoot;
+            ESP_ERROR_CHECK(settings.get("volumeonboot", volumeOnBoot));
+            displayInfo.volume = std::stoi(volumeOnBoot);
+            //madbit->setVolume(vol);
+        } else
+        {
+            madbit->sendCommand(PROTOCOL_CMD_RUX_GET_VOLUME);
+        }
+        madbit->sendCommand(PROTOCOL_CMD_RUX_GET_PRESET);
+        madbit->sendCommand(PROTOCOL_CMD_RUX_GET_SOURCE);
+
+        TaskHandle_t taskHandle;
+        xTaskCreate(refreshTask, "BTREFRESH", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &taskHandle);       
+    
+         while (displayInfo.volume < 0 || displayInfo.preset < 0 || displayInfo.source < 0)
+         {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+         }
+         
+        displayInfo.initialized = true;
+        displayInfo.connected = true;
+        display->setInfo(displayInfo);
     }
 
     void setVolume(int vol) {
         displayInfo.volume = vol;
         display->setInfo(displayInfo);
-        madbit->setVolume(vol);
+        uint8_t newVolume[4] = {uint8_t(Madbit::Volume::MAX - vol), 0, 0, 0};
+        madbit->sendCommand(PROTOCOL_CMD_RUX_SET_VOLUME, &newVolume[0], 4);
     }
 
-    void setConnected(bool c) {
-        displayInfo.connected = c;
-        display->setInfo(displayInfo);
+    int getVolume() {
+        return displayInfo.volume;
     }
 
 private:
     int volume = 30;
+    friend void refreshTask(void*);
 
     Madbit* madbit;
     Display* display;
     Display::Info displayInfo;
 };
 
+void refreshTask(void* arg) {
+    ESP_LOGV("BTREFRESH", "Task started");
+    auto madwiim = reinterpret_cast<MadWiiM*>(arg);
+    auto messageBuf = madwiim->madbit->getMessageBuf();
+
+    uint8_t buf[128];
+    while (xMessageBufferReceive(messageBuf, buf, sizeof(buf), portMAX_DELAY))
+    {
+        auto msg = reinterpret_cast<TProtocol *>(buf);
+        ESP_LOGI(TAG, "Response CMD: %d", msg->cmd);
+
+        switch (msg->cmd)
+        {
+            case PROTOCOL_CMD_RUX_GET_VOLUME:
+                if (madwiim->displayInfo.volume < 0)
+                    madwiim->displayInfo.volume = Madbit::Volume::MAX - msg->data;
+                break;
+
+            case PROTOCOL_CMD_RUX_GET_SOURCE:
+            case PROTOCOL_CMD_RUX_SET_SOURCE:
+                madwiim->displayInfo.source = msg->data;
+                break;
+            
+            case PROTOCOL_CMD_RUX_GET_PRESET:
+                madwiim->displayInfo.preset = msg->data;
+                break;
+
+            default:
+                break;
+        }
+    }
+}
+
 static void button_single_click_cb(void *arg,void *usr_data)
 {
     ESP_LOGI(TAG, "BUTTON_SINGLE_CLICK");
 
-    //Madbit* madbit = static_cast<Madbit*>(usr_data);
-    //madbit->reboot();
+    Madbit* madbit = static_cast<Madbit*>(usr_data);
+
+    madbit->sendCommand(PROTOCOL_CMD_RUX_INC_SOURCE);
+    madbit->sendCommand(PROTOCOL_CMD_OK);
+    madbit->sendCommand(PROTOCOL_CMD_RUX_GET_SOURCE);
 }
 
 void initButtons(void* arg) {
@@ -131,54 +180,42 @@ extern "C" void app_main() {
         ESP_LOGI(TAG, "FORCE REINIT: %d", forceReinit);
 
         ensure_initialized(*display, forceReinit);
-        Display::Info info;
-        info.initialized = true;
-        display->setInfo(info);
     }
 
     Madbit& madbit = Madbit::getInstance();
     MadWiiM* madwiim = new MadWiiM(&madbit, display);
     initButtons(&madbit);
-
-    while (true)
-    {
-        if (madbit.connected) {
-            madwiim->setConnected(true);
-            break;
-        }
-
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
-    
+  
     auto& settings = SettingsStorage::getInstance();
     std::string encoderSpeedDivStr;
     ESP_ERROR_CHECK(settings.get("encoderspeeddiv", encoderSpeedDivStr));
     auto encoderSpeedDiv = std::stoi(encoderSpeedDivStr);
     ESP_LOGI(TAG, "Encoder speed divider: %d", encoderSpeedDiv);
 
-    int volume = madwiim->init();
-    
+    madwiim->init();
     Encoder::Config cfg;
     cfg.gpioA = GPIO_NUM_5;
     cfg.gpioB = GPIO_NUM_19;
-
     Encoder enc(cfg);
-    int val = enc.getValue();
+    int encoderValue = enc.getValue();
+    auto volume = madwiim->getVolume();
     while (true)
     {
-        auto newVal = enc.getValue();
-        if (newVal != val) {
-            auto volumeDiff = (newVal - val) / encoderSpeedDiv;
-            if (volumeDiff) {
+        auto newEncoderValue = enc.getValue();
+        if (newEncoderValue != encoderValue)
+        {
+            auto volumeDiff = (newEncoderValue - encoderValue); // TODO / encoderSpeedDiv;
+            if (volumeDiff)
+            {
                 volume += volumeDiff;
                 volume = std::min<int>(volume, Madbit::Volume::MAX);
                 volume = std::max<int>(volume, Madbit::Volume::MIN);
 
                 madwiim->setVolume(volume);
-                val = newVal;
+                encoderValue = newEncoderValue;
             }
         }
 
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 }

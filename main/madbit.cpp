@@ -46,7 +46,7 @@ std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
 
     res[7] = calccrc(&res[0], res.size());
 
-    ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_DEBUG);
+    ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_ERROR);
     return res;
 }
 
@@ -122,6 +122,18 @@ std::string get_name_from_eir(uint8_t *eir)
     return name.c_str();
 }
 
+void writeTask(void*) {
+    auto& madbit = Madbit::getInstance();
+    ESP_LOGE("BTWRITE", "Task started");
+
+    uint8_t buf[128];
+    int msgSize = 0; 
+    while ((msgSize = xMessageBufferReceive(madbit.writeBuf, buf, sizeof(buf),  portMAX_DELAY)))
+    {
+        write(madbit.fd, &buf[0], msgSize);
+    }
+}
+
 void readTask(void*) {
     auto& madbit = Madbit::getInstance();
     ESP_LOGV("BTREAD", "Task started");
@@ -138,8 +150,8 @@ void readTask(void*) {
             auto cmdBeginIdx = 0;
             while ((cmdBeginIdx = data.find("[CMD]")) != std::string::npos)
             {
+                //ESP_LOGE(TAG, "MSG RCV offset:%d size:%d", cmdBeginIdx, data.size());
                 //ESP_LOG_BUFFER_HEXDUMP("DATA", data.c_str(), data.size(), ESP_LOG_ERROR);
-                //ESP_LOGE(TAG, "CMDF %d %d", cmdBeginIdx, data.size());
 
                 auto cmdLength = data.length() - cmdBeginIdx;
                 if (cmdLength < sizeof(TProtocol))
@@ -151,19 +163,8 @@ void readTask(void*) {
                     break;
 
                 std::string line = data.substr(cmdBeginIdx, cmdLengthMust);
-                ESP_LOG_BUFFER_HEXDUMP("BTRESP", line.c_str(), line.size(), ESP_LOG_DEBUG);
-
-                if (madbit.sendToMessageBufChanged) {
-                    madbit.sendToMessageBufChanged = false;
-                    
-                    if (madbit.sendToMessageBuf) {
-                        xMessageBufferReset(madbit.messageBuf); // remove old messages
-                        ESP_LOGD(TAG, "ERASE MSGBUF");
-                    }
-                }
-
-                if (madbit.sendToMessageBuf)
-                    xMessageBufferSend(madbit.messageBuf, &line[0], cmdLengthMust, portMAX_DELAY);
+                ESP_LOG_BUFFER_HEXDUMP("BTRESP", line.c_str(), line.size(), ESP_LOG_VERBOSE);
+                xMessageBufferSend(madbit.messageBuf, &line[0], cmdLengthMust, portMAX_DELAY);
                 
                 data.erase(0, cmdBeginIdx + cmdLengthMust);
             }
@@ -216,6 +217,7 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
             Madbit::getInstance().connected = true;
             TaskHandle_t taskHandle;
             xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
+            xTaskCreate(writeTask, "BTWRITE", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
         } else {
             ESP_LOGE(TAG, "ESP_SPP_OPEN_EVT status:%d", param->open.status);
         }
@@ -391,6 +393,8 @@ Madbit::Madbit(void)
 {
     constexpr auto messageBufSize = 1000;
     messageBuf = xMessageBufferCreate(messageBufSize);
+    writeBuf =  xMessageBufferCreate(messageBufSize);
+
     ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_BLE));
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
@@ -426,71 +430,12 @@ void Madbit::reconnect(void) {
     esp_restart();
 }
 
-template <typename Ret>
-Ret Madbit::runCommand(int cmd, Ret (Madbit::*cb)(const TProtocol& arg)) {
-    auto packet = packetCompose(cmd);
-
-    enableNotificationMessages();
-    do {} while (xMessageBufferReset(messageBuf) == pdFAIL); // clear old messages
-
-    write(fd, &packet[0], packet.size());
-
-    while (true) {
-        uint8_t buf[128];
-        xMessageBufferReceive(messageBuf, buf, sizeof(buf), portMAX_DELAY);
-        auto msg = reinterpret_cast<TProtocol*>(buf);
-
-        if (msg->cmd == cmd || msg->cmd == 52) {
-            return (this->*cb)(*msg);
-        }
-        else
-            ESP_LOGE(TAG, "CMD Mismatch %d %d", msg->cmd, cmd);
-    }
-
-    disableNotificationMessages();
-    return 0;
+void Madbit::sendCommand(uint8_t cmd, uint8_t* data, int dataLen) {
+    ESP_LOGI(TAG, "sendCommand %d", cmd);
+    auto packet = packetCompose(cmd, data, dataLen);
+    xMessageBufferSend(writeBuf, &packet[0], packet.size(), portMAX_DELAY);
 }
 
-int Madbit::getVolume() {
-
-    return runCommand(PROTOCOL_CMD_RUX_GET_VOLUME, &Madbit::getVolumeCb);
-}
-
-int Madbit::getVolumeCb(const TProtocol& msg) {
-    auto volume = Volume::MAX - msg.data;
-    ESP_LOGI(TAG, "GetVolume: %d", volume);
-    return volume;
-}
-
-int Madbit::getSource() {
-
-    return runCommand(PROTOCOL_CMD_RUX_GET_SOURCE, &Madbit::getSourceCb);
-}
-
-int Madbit::getSourceCb(const TProtocol& msg) {
-    ESP_LOGI(TAG, "getSource: %d", msg.data);
-    return 0;
-}
-
-void Madbit::setVolume(int newVol) {
-
-    uint8_t newVolume[4] = {uint8_t(Volume::MAX - newVol), 0, 0, 0};
-    auto packet = packetCompose(PROTOCOL_CMD_RUX_SET_VOLUME, &newVolume[0], 4);
-   
-    write(fd, &packet[0], packet.size());
-}
-
-void Madbit::reboot() {
-    auto packet = packetCompose(PROTOCOL_CMD_RESTART);
-    write(fd, &packet[0], packet.size());
-}
-
-void Madbit::enableNotificationMessages() {
-    sendToMessageBuf = true;
-    sendToMessageBufChanged = true;
-}
-
-void Madbit::disableNotificationMessages() {
-    sendToMessageBuf = false;
-    sendToMessageBufChanged = true;
+MessageBufferHandle_t Madbit::getMessageBuf() {
+    return messageBuf;
 }

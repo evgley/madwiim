@@ -29,7 +29,7 @@ void animate(void* self) {
             lv_label_set_text(display->customLabel, "");
             lv_obj_add_flag(display->customLabel, LV_OBJ_FLAG_HIDDEN);
         
-            if (display->info.connected || ((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2)
+            if (!display->info.connected &&  ((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2)
                 lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
             else
                 lv_obj_add_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
@@ -42,13 +42,13 @@ void animate(void* self) {
 }
 
 void Display::setInfo(const Info& info) {
-    ESP_LOGI(TAG, "setInfo %d", info.volume);
+    ESP_LOGI(TAG, "setInfo volume: %d source: %d preset: %d", info.volume, info.source, info.preset);
     this->info = info;
 
 #ifndef DUMMY_DISPLAY
     lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
     lv_label_set_text_fmt(sourceLabel, "%d", info.source);
-    lv_label_set_text_fmt(presetLabel, "%d", info.source);
+    lv_label_set_text_fmt(presetLabel, "%d", info.preset);
 
     if (info.connected) {
         lv_obj_clear_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
