@@ -61,7 +61,6 @@ void Display::setInfo(const Info& info) {
         lv_obj_add_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
     }
 
-    lv_refr_now(NULL);
 #endif // DUMMY_DISPLAY
 }
 
@@ -105,7 +104,8 @@ lv_obj_t* Display::init() {
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
     ESP_LOGI(TAG, "Initialize LVGL");
-    const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
+    lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
+    lvgl_cfg.task_max_sleep_ms = 100;
     lvgl_port_init(&lvgl_cfg);
 
     const lvgl_port_display_cfg_t disp_cfg = {

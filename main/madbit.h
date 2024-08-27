@@ -24,7 +24,7 @@ struct Madbit {
 private:
     void reconnect();
     
-    friend void readTask(void*);
+    friend void readTask(char* buf, uint16_t size);
     friend void writeTask(void*);
 
     friend void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param);
@@ -32,8 +32,9 @@ private:
     
     MessageBufferHandle_t messageBuf;
     MessageBufferHandle_t writeBuf;
+    TaskHandle_t writeTask;
 
-    int fd;
+    int handle;
 
     Madbit();
 };

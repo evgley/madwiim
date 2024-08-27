@@ -29,6 +29,7 @@ extern "C" {
 #define TAG "MAD"
 #define DEVICE_NAME "MADBIT_ESP32"
 #define PIN_LENGTH 4
+#define WRITE_NOTIFY_INDEX 1
 
 extern "C" uint8_t calccrc(void* data,int size);
 
@@ -46,7 +47,7 @@ std::vector<uint8_t> packetCompose(uint8_t cmd, uint8_t* data, int dataLen) {
 
     res[7] = calccrc(&res[0], res.size());
 
-    ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_ERROR);
+    ESP_LOG_BUFFER_HEXDUMP("BTWRITE", &res[0], res.size(), ESP_LOG_DEBUG);
     return res;
 }
 
@@ -54,13 +55,9 @@ std::vector<uint8_t> packetCompose(int cmd) {
     return packetCompose(cmd, NULL, 0);
 }
 
-#if (SPP_SHOW_MODE == SPP_SHOW_DATA)
-#define SPP_DATA_LEN 8
-#else
-#define SPP_DATA_LEN ESP_SPP_MAX_MTU
-#endif
-static uint8_t spp_data[SPP_DATA_LEN];
+static uint8_t spp_data[ESP_SPP_MAX_MTU];
 static uint8_t *s_p_data = NULL; /* data pointer of spp_data */
+static uint16_t spp_data_length;
 
 static char *bda2str(uint8_t * bda, char *str, size_t size)
 {
@@ -124,56 +121,50 @@ std::string get_name_from_eir(uint8_t *eir)
 
 void writeTask(void*) {
     auto& madbit = Madbit::getInstance();
-    ESP_LOGE("BTWRITE", "Task started");
-
-    uint8_t buf[128];
-    int msgSize = 0; 
-    while ((msgSize = xMessageBufferReceive(madbit.writeBuf, buf, sizeof(buf),  portMAX_DELAY)))
+    while ((spp_data_length = xMessageBufferReceive(madbit.writeBuf, spp_data, sizeof(spp_data),  portMAX_DELAY)))
     {
-        write(madbit.fd, &buf[0], msgSize);
-    }
-}
-
-void readTask(void*) {
-    auto& madbit = Madbit::getInstance();
-    ESP_LOGV("BTREAD", "Task started");
-
-    std::string data;
-    while (true)
-    {
-        char b[255];
-        int red = read(madbit.fd, b, 255);
-        if (red > 0) {
-            ESP_LOG_BUFFER_HEXDUMP("BTREAD", b, red, ESP_LOG_DEBUG);
-            data.append(b, red);
-
-            auto cmdBeginIdx = 0;
-            while ((cmdBeginIdx = data.find("[CMD]")) != std::string::npos)
-            {
-                //ESP_LOGE(TAG, "MSG RCV offset:%d size:%d", cmdBeginIdx, data.size());
-                //ESP_LOG_BUFFER_HEXDUMP("DATA", data.c_str(), data.size(), ESP_LOG_ERROR);
-
-                auto cmdLength = data.length() - cmdBeginIdx;
-                if (cmdLength < sizeof(TProtocol))
-                    break;
-
-                auto res = reinterpret_cast<const TProtocol *>(&data[cmdBeginIdx]);
-                auto cmdLengthMust = res->sizediv4 * 4;
-                if (cmdLength < cmdLengthMust)
-                    break;
-
-                std::string line = data.substr(cmdBeginIdx, cmdLengthMust);
-                ESP_LOG_BUFFER_HEXDUMP("BTRESP", line.c_str(), line.size(), ESP_LOG_VERBOSE);
-                xMessageBufferSend(madbit.messageBuf, &line[0], cmdLengthMust, portMAX_DELAY);
-                
-                data.erase(0, cmdBeginIdx + cmdLengthMust);
-            }
+        s_p_data = spp_data;
+        uint32_t needSend = true;
+        while (needSend)
+        {
+            ESP_ERROR_CHECK(esp_spp_write(madbit.handle, spp_data_length, spp_data));
+            xTaskNotifyWaitIndexed(WRITE_NOTIFY_INDEX, 0, ULONG_MAX, &needSend, portMAX_DELAY);
         }
-
-        vTaskDelay(10);
     }
 }
 
+void readTask(char* buf, uint16_t size) {
+    auto& madbit = Madbit::getInstance();
+    static std::string data;
+
+    if (size > 0)
+    {
+        ESP_LOG_BUFFER_HEXDUMP("BTREAD", buf, size, ESP_LOG_DEBUG);
+        data.append(buf, size);
+
+        auto cmdBeginIdx = 0;
+        while ((cmdBeginIdx = data.find("[CMD]")) != std::string::npos)
+        {
+            // ESP_LOGE(TAG, "MSG RCV offset:%d size:%d", cmdBeginIdx, data.size());
+            // ESP_LOG_BUFFER_HEXDUMP("DATA", data.c_str(), data.size(), ESP_LOG_ERROR);
+
+            auto cmdLength = data.length() - cmdBeginIdx;
+            if (cmdLength < sizeof(TProtocol))
+                break;
+
+            auto res = reinterpret_cast<const TProtocol *>(&data[cmdBeginIdx]);
+            auto cmdLengthMust = res->sizediv4 * 4;
+            if (cmdLength < cmdLengthMust)
+                break;
+
+            std::string line = data.substr(cmdBeginIdx, cmdLengthMust);
+            ESP_LOG_BUFFER_HEXDUMP("BTRESP", line.c_str(), line.size(), ESP_LOG_VERBOSE);
+            xMessageBufferSend(madbit.messageBuf, &line[0], cmdLengthMust, portMAX_DELAY);
+
+            data.erase(0, cmdBeginIdx + cmdLengthMust);
+        }
+    }
+}
 
 void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
 {
@@ -210,14 +201,10 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
         if (param->open.status == ESP_SPP_SUCCESS) {
             ESP_LOGI(TAG, "ESP_SPP_OPEN_EVT handle:%" PRIu32 " rem_bda:[%s]", param->open.handle,
                      bda2str(param->open.rem_bda, bda_str, sizeof(bda_str)));
-            /* Start to write the first data packet */
-            //esp_spp_write(param->open.handle, SPP_DATA_LEN, spp_data);
-            //s_p_data = spp_data;
-            Madbit::getInstance().fd = param->open.fd;
-            Madbit::getInstance().connected = true;
-            TaskHandle_t taskHandle;
-            xTaskCreate(readTask, "BTREAD", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
-            xTaskCreate(writeTask, "BTWRITE", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &taskHandle);
+            auto& madbit = Madbit::getInstance();
+            madbit.handle = param->open.handle;
+            madbit.connected = true;
+            xTaskCreate(writeTask, "BTWRITE", CONFIG_ESP_MAIN_TASK_STACK_SIZE, NULL, tskIDLE_PRIORITY, &madbit.writeTask);
         } else {
             ESP_LOGE(TAG, "ESP_SPP_OPEN_EVT status:%d", param->open.status);
         }
@@ -240,14 +227,14 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
         }
         break;
     case ESP_SPP_DATA_IND_EVT:
-        ESP_LOGI(TAG, "ESP_SPP_DATA_IND_EVT");
-        ESP_LOG_BUFFER_HEX(TAG, param->data_ind.data, param->data_ind.len);
+        readTask(reinterpret_cast<char*>(param->data_ind.data), param->data_ind.len);
         break;
     case ESP_SPP_WRITE_EVT:
+        ESP_LOGD(TAG, "ESP_SPP_WRITE_EVT status: %d length: %d", param->write.status, param->write.len);
         if (param->write.status == ESP_SPP_SUCCESS) {
-            if (s_p_data + param->write.len == spp_data + SPP_DATA_LEN) {
+            if (s_p_data + param->write.len == spp_data + spp_data_length) {
                 /* Means the previous data packet be sent completely, send a new data packet */
-                s_p_data = spp_data;
+                xTaskNotifyIndexed(Madbit::getInstance().writeTask, WRITE_NOTIFY_INDEX, 0, eSetValueWithOverwrite);
             } else {
                 /*
                  * Means the previous data packet only be sent partially due to the lower layer congestion, resend the
@@ -255,24 +242,9 @@ void esp_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
                  */
                 s_p_data += param->write.len;
             }
-
-            /*
-             * We only show the data in which the data length is less than 128 here. If you want to print the data and
-             * the data rate is high, it is strongly recommended to process them in other lower priority application task
-             * rather than in this callback directly. Since the printing takes too much time, it may stuck the Bluetooth
-             * stack and also have a effect on the throughput!
-             */
-            ESP_LOGI(TAG, "ESP_SPP_WRITE_EVT len:%d handle:%lu cong:%d", param->write.len, param->write.handle,
-                     param->write.cong);
-            if (param->write.len < 128) {
-                esp_log_buffer_hex("", spp_data, param->write.len);
-                /* Delay a little to avoid the task watch dog */
-                vTaskDelay(pdMS_TO_TICKS(10));
-            }
-
         } else {
             /* Means the prevous data packet is not sent at all, need to send the whole data packet again. */
-            ESP_LOGE(TAG, "ESP_SPP_WRITE_EVT status:%d", param->write.status);
+            xTaskNotifyIndexed(Madbit::getInstance().writeTask, WRITE_NOTIFY_INDEX, 1, eSetValueWithOverwrite);
         }
 
         if (!param->write.cong) {
@@ -406,9 +378,8 @@ Madbit::Madbit(void)
     ESP_ERROR_CHECK(esp_spp_register_callback(esp_spp_cb));
 
     esp_spp_cfg_t bt_spp_cfg = {
-        .mode = ESP_SPP_MODE_VFS,
+        .mode = ESP_SPP_MODE_CB,
         .enable_l2cap_ertm = true,
-        .tx_buffer_size = ESP_SPP_MIN_TX_BUFFER_SIZE, /* Only used for ESP_SPP_MODE_VFS mode */
     };
     ESP_ERROR_CHECK(esp_spp_enhanced_init(&bt_spp_cfg));
     ESP_ERROR_CHECK(esp_spp_vfs_register());
@@ -433,6 +404,7 @@ void Madbit::reconnect(void) {
 void Madbit::sendCommand(uint8_t cmd, uint8_t* data, int dataLen) {
     ESP_LOGI(TAG, "sendCommand %d", cmd);
     auto packet = packetCompose(cmd, data, dataLen);
+
     xMessageBufferSend(writeBuf, &packet[0], packet.size(), portMAX_DELAY);
 }
 

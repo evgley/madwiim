@@ -47,7 +47,10 @@ public:
             std::string volumeOnBoot;
             ESP_ERROR_CHECK(settings.get("volumeonboot", volumeOnBoot));
             displayInfo.volume = std::stoi(volumeOnBoot);
-            //madbit->setVolume(vol);
+
+            uint8_t volumeBuf[4] = {uint8_t(Madbit::Volume::MAX - displayInfo.volume), 0, 0, 0};
+            madbit->sendCommand(PROTOCOL_CMD_RUX_SET_VOLUME, &volumeBuf[0], 4);
+
         } else
         {
             madbit->sendCommand(PROTOCOL_CMD_RUX_GET_VOLUME);
@@ -99,9 +102,11 @@ void refreshTask(void* arg) {
         auto msg = reinterpret_cast<TProtocol *>(buf);
         ESP_LOGI(TAG, "Response CMD: %d", msg->cmd);
 
+        bool setDisplayInfo = true;
         switch (msg->cmd)
         {
             case PROTOCOL_CMD_RUX_GET_VOLUME:
+                setDisplayInfo = false;
                 if (madwiim->displayInfo.volume < 0)
                     madwiim->displayInfo.volume = Madbit::Volume::MAX - msg->data;
                 break;
@@ -118,13 +123,14 @@ void refreshTask(void* arg) {
             default:
                 break;
         }
+
+        if (setDisplayInfo)
+            madwiim->display->setInfo(madwiim->displayInfo);
     }
 }
 
 static void button_single_click_cb(void *arg,void *usr_data)
 {
-    ESP_LOGI(TAG, "BUTTON_SINGLE_CLICK");
-
     Madbit* madbit = static_cast<Madbit*>(usr_data);
 
     madbit->sendCommand(PROTOCOL_CMD_RUX_INC_SOURCE);
@@ -147,7 +153,7 @@ void initButtons(void* arg) {
         ESP_LOGE(TAG, "Button create failed");
     }
 
-    iot_button_register_cb(gpio_btn1, BUTTON_PRESS_DOWN, button_single_click_cb, (void*)arg);
+    iot_button_register_cb(gpio_btn1, BUTTON_SINGLE_CLICK, button_single_click_cb, (void*)arg);
 
     gpio_btn_cfg.gpio_button_config.gpio_num = GPIO_NUM_32;
     button_handle_t gpio_btn2 = iot_button_create(&gpio_btn_cfg);
