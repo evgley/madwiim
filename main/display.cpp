@@ -17,50 +17,49 @@
 
 extern lv_font_t lato_44;
 
-void animate(void* self) {
-    Display* display = static_cast<Display*>(self);
+void Display::setState(State s) {
+    state = s;
 
-    while (true)
+    switch (s)
     {
-        if (!display->info.initialized) {
-            lv_label_set_text(display->customLabel, "INIT");
-            lv_obj_clear_flag(display->customLabel, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_label_set_text(display->customLabel, "");
-            lv_obj_add_flag(display->customLabel, LV_OBJ_FLAG_HIDDEN);
-        
-            if (!display->info.connected &&  ((xTaskGetTickCount() / portTICK_PERIOD_MS) / 5) % 2)
-                lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
-            else
-                lv_obj_add_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
-        }
-        
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
+    case State::Configuring:
+        lv_label_set_text(customLabel, "INIT");
+        lv_obj_clear_flag(customLabel, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_clear_flag(display->bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
+        break;
+    case State::Connecting:
+        lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_anim_start(&animation);
+        break;
+
+    case State::Connected:
+        lv_obj_clear_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
+
+        lv_anim_del(bluetoothLabel, nullptr);
+        lv_obj_add_flag(bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+        break;
+    
+    default:
+        break;
+    }
 }
+
 
 void Display::setInfo(const Info& info) {
     ESP_LOGI(TAG, "setInfo volume: %d source: %d preset: %d", info.volume, info.source, info.preset);
-    this->info = info;
+    //this->info = info;
 
 #ifndef DUMMY_DISPLAY
     lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
     lv_label_set_text_fmt(sourceLabel, "%d", info.source);
     lv_label_set_text_fmt(presetLabel, "%d", info.preset);
-
-    if (info.connected) {
-        lv_obj_clear_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
-    }
-    else {
-        lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
-    }
-
 #endif // DUMMY_DISPLAY
 }
 
@@ -157,11 +156,26 @@ void Display::createObjects(lv_obj_t* scr) {
     lv_obj_add_flag(bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
 }
 
+void animate_bluetooth(void *arg, int32_t value) {
+    ESP_LOGE(TAG, "ANIM %lu", value);
+    auto obj = (lv_obj_t*)arg;
+
+    if (value % 2)
+        lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
+    else
+        lv_obj_add_flag(obj, LV_OBJ_FLAG_HIDDEN);
+}
+
 Display::Display()
 {
 #ifndef DUMMY_DISPLAY
         createObjects(init());
-        xTaskCreate(animate, "ANIM", CONFIG_ESP_MAIN_TASK_STACK_SIZE, this, tskIDLE_PRIORITY, &animateTask);
+        lv_anim_init(&animation);
+        lv_anim_set_exec_cb(&animation, animate_bluetooth);
+        lv_anim_set_var(&animation, bluetoothLabel);
+        lv_anim_set_time(&animation, 50000);
+        lv_anim_set_values(&animation, 0, 100);
+        lv_anim_set_repeat_count(&animation, LV_ANIM_REPEAT_INFINITE);
 #endif // DUMMY_DISPLAY
 }
 

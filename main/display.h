@@ -14,14 +14,20 @@ struct Display {
 
     Display();
 
+    enum class State {
+        Unknown,
+        Configuring,
+        Connecting,
+        Connected
+    };
+
     struct Info {
         int volume = 0;
         int source = 0;
         int preset = 0;
-        bool connected = false;
-        bool initialized = false;
     };
     void setInfo(const Info& info);
+    void setState(State s);
 
 private:
     friend void animate(void*);
@@ -36,5 +42,6 @@ private:
     lv_obj_t* bluetoothLabel;
     lv_obj_t* customLabel;
 
-    TaskHandle_t animateTask;
+    State state;
+    lv_anim_t animation;
 };

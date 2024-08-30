@@ -25,6 +25,7 @@ public:
         : madbit(madbit)
         , display(display) {
 
+        display->setState(Display::State::Connecting);
     }
 
     void init() {
@@ -32,8 +33,6 @@ public:
         displayInfo.volume = -1;
         displayInfo.source = -1;
         displayInfo.preset = -1;
-        displayInfo.initialized = true;
-        display->setInfo(displayInfo);
 
         while (!madbit->connected)
         {
@@ -66,8 +65,7 @@ public:
             vTaskDelay(100 / portTICK_PERIOD_MS);
          }
          
-        displayInfo.initialized = true;
-        displayInfo.connected = true;
+        display->setState(Display::State::Connected);
         display->setInfo(displayInfo);
     }
 
@@ -210,7 +208,7 @@ extern "C" void app_main() {
         auto newEncoderValue = enc.getValue();
         if (newEncoderValue != encoderValue)
         {
-            auto volumeDiff = (newEncoderValue - encoderValue); // TODO / encoderSpeedDiv;
+            auto volumeDiff = (newEncoderValue - encoderValue) / encoderSpeedDiv;
             if (volumeDiff)
             {
                 volume += volumeDiff;
