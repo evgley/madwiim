@@ -65,13 +65,16 @@ public:
             vTaskDelay(100 / portTICK_PERIOD_MS);
          }
          
+        ESP_LOGI(TAG, "Connected");
+        display->setPreset(displayInfo.preset);
+        display->setSource(displayInfo.source);
+        display->setVolume(displayInfo.volume);
         display->setState(Display::State::Connected);
-        display->setInfo(displayInfo);
     }
 
     void setVolume(int vol) {
         displayInfo.volume = vol;
-        display->setInfo(displayInfo);
+        display->setVolume(vol);
         uint8_t newVolume[4] = {uint8_t(Madbit::Volume::MAX - vol), 0, 0, 0};
         madbit->sendCommand(PROTOCOL_CMD_RUX_SET_VOLUME, &newVolume[0], 4);
     }
@@ -90,7 +93,6 @@ private:
 };
 
 void refreshTask(void* arg) {
-    ESP_LOGV("BTREFRESH", "Task started");
     auto madwiim = reinterpret_cast<MadWiiM*>(arg);
     auto messageBuf = madwiim->madbit->getMessageBuf();
 
@@ -100,11 +102,9 @@ void refreshTask(void* arg) {
         auto msg = reinterpret_cast<TProtocol *>(buf);
         ESP_LOGI(TAG, "Response CMD: %d", msg->cmd);
 
-        bool setDisplayInfo = true;
         switch (msg->cmd)
         {
             case PROTOCOL_CMD_RUX_GET_VOLUME:
-                setDisplayInfo = false;
                 if (madwiim->displayInfo.volume < 0)
                     madwiim->displayInfo.volume = Madbit::Volume::MAX - msg->data;
                 break;
@@ -112,18 +112,17 @@ void refreshTask(void* arg) {
             case PROTOCOL_CMD_RUX_GET_SOURCE:
             case PROTOCOL_CMD_RUX_SET_SOURCE:
                 madwiim->displayInfo.source = msg->data;
+                madwiim->display->setSource(msg->data);
                 break;
             
             case PROTOCOL_CMD_RUX_GET_PRESET:
                 madwiim->displayInfo.preset = msg->data;
+                madwiim->display->setPreset(msg->data);
                 break;
 
             default:
                 break;
         }
-
-        if (setDisplayInfo)
-            madwiim->display->setInfo(madwiim->displayInfo);
     }
 }
 

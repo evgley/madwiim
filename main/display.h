@@ -28,6 +28,9 @@ struct Display {
     };
     void setInfo(const Info& info);
     void setState(State s);
+    void setVolume(int volume);
+    void setSource(int source);
+    void setPreset(int preset);
 
 private:
     friend void animate(void*);

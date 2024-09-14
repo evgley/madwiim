@@ -63,6 +63,21 @@ void Display::setInfo(const Info& info) {
 #endif // DUMMY_DISPLAY
 }
 
+void Display::setVolume(int volume)
+{
+    lv_label_set_text_fmt(volumeLabel, "%d", volume);
+}
+
+void Display::setSource(int source)
+{
+    lv_label_set_text_fmt(volumeLabel, "%d", source);
+}
+
+void Display::setPreset(int preset)
+{
+    lv_label_set_text_fmt(volumeLabel, "%d", preset);
+}
+
 lv_obj_t* Display::init() {
     i2c_config_t i2c_conf = {
         .mode = I2C_MODE_MASTER,
@@ -156,10 +171,9 @@ void Display::createObjects(lv_obj_t* scr) {
     lv_obj_add_flag(bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
 }
 
-void animate_bluetooth(void *arg, int32_t value) {
-    ESP_LOGE(TAG, "ANIM %lu", value);
+void animate_bluetooth(void *arg, int32_t value)
+{
     auto obj = (lv_obj_t*)arg;
-
     if (value % 2)
         lv_obj_clear_flag(obj, LV_OBJ_FLAG_HIDDEN);
     else
