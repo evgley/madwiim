@@ -15,6 +15,24 @@
 
 //#define DUMMY_DISPLAY
 
+extern const uint8_t usb_flash_png_start[] asm("_binary_usb_flash_png_start");
+extern const uint8_t usb_flash_png_end[]   asm("_binary_usb_flash_png_end");
+
+extern const uint8_t usb_audio_png_start[] asm("_binary_usb_audio_png_start");
+extern const uint8_t usb_audio_png_end[]   asm("_binary_usb_audio_png_end");
+
+extern const uint8_t toslink_png_start[] asm("_binary_toslink_png_start");
+extern const uint8_t toslink_png_end[]   asm("_binary_toslink_png_end");
+
+extern const uint8_t coax_png_start[] asm("_binary_coax_png_start");
+extern const uint8_t coax_png_end[]   asm("_binary_coax_png_end");
+
+extern const uint8_t analog_png_start[] asm("_binary_analog_png_start");
+extern const uint8_t analog_png_end[]   asm("_binary_analog_png_end");
+
+extern const uint8_t bluetooth_png_start[] asm("_binary_bluetooth_png_start");
+extern const uint8_t bluetooth_png_end[]   asm("_binary_bluetooth_png_end");
+
 extern lv_font_t lato_44;
 
 void Display::setState(State s) {
@@ -27,19 +45,16 @@ void Display::setState(State s) {
         lv_obj_clear_flag(customLabel, LV_OBJ_FLAG_HIDDEN);
 
         lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
         break;
     case State::Connecting:
         lv_obj_add_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_add_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
         lv_anim_start(&animation);
         break;
 
     case State::Connected:
         lv_obj_clear_flag(volumeLabel, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_clear_flag(sourceLabel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_clear_flag(presetLabel, LV_OBJ_FLAG_HIDDEN);
 
         lv_anim_del(bluetoothLabel, nullptr);
@@ -52,25 +67,66 @@ void Display::setState(State s) {
 }
 
 
-void Display::setInfo(const Info& info) {
-    ESP_LOGI(TAG, "setInfo volume: %d source: %d preset: %d", info.volume, info.source, info.preset);
-    //this->info = info;
-
-#ifndef DUMMY_DISPLAY
-    lv_label_set_text_fmt(volumeLabel, "%d", info.volume);
-    lv_label_set_text_fmt(sourceLabel, "%d", info.source);
-    lv_label_set_text_fmt(presetLabel, "%d", info.preset);
-#endif // DUMMY_DISPLAY
-}
-
 void Display::setVolume(int volume)
 {
     lv_label_set_text_fmt(volumeLabel, "%d", volume);
 }
 
+lv_img_dsc_t getImageBySource(int source) {
+    const uint8_t* imgBegin = nullptr;
+    const uint8_t* imgEnd = nullptr;
+
+    switch (source)
+    {
+    case 0:
+        imgBegin = analog_png_start;
+        imgEnd = analog_png_end;
+        break;
+    
+    case 1:
+        imgBegin = usb_flash_png_start;
+        imgEnd = usb_flash_png_end;
+        break;
+
+    case 2:
+        imgBegin = usb_audio_png_start;
+        imgEnd = usb_audio_png_end;
+        break;
+
+    case 3:
+        imgBegin = toslink_png_start;
+        imgEnd = toslink_png_end;
+        break;
+
+     case 4:
+        imgBegin = coax_png_start;
+        imgEnd = coax_png_end;
+        break;
+
+    case 5:
+        imgBegin = bluetooth_png_start;
+        imgEnd = bluetooth_png_end;
+        break;  
+
+    default:
+        ESP_ERROR_CHECK(source);
+        break;
+    }
+
+    lv_img_dsc_t img_dsc;
+    img_dsc.header.always_zero = 0;
+    img_dsc.header.w = 64;
+    img_dsc.header.h = 32;
+    img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR_ALPHA;
+    img_dsc.data_size = imgEnd - imgBegin;
+    img_dsc.data = imgBegin;
+    return img_dsc;
+}
+
 void Display::setSource(int source)
 {
-    lv_label_set_text_fmt(volumeLabel, "%d", source);
+    sourceIconDsc = getImageBySource(source);
+    lv_img_set_src(sourceIcon, &sourceIconDsc);
 }
 
 void Display::setPreset(int preset)
@@ -147,10 +203,6 @@ void Display::createObjects(lv_obj_t* scr) {
     lv_label_set_text(customLabel, "");
 
     volumeLabel = lv_label_create(scr);
-    lv_label_set_text(volumeLabel, "");
-
-    sourceLabel = lv_label_create(scr);
-    lv_label_set_text(sourceLabel, "");
 
     presetLabel = lv_label_create(scr);
     lv_label_set_text(presetLabel, "");
@@ -159,16 +211,15 @@ void Display::createObjects(lv_obj_t* scr) {
     lv_style_init(&style);
     lv_style_set_text_font(&style, &lato_44); // <--- you have to enable other font sizes in menuconfig
     lv_obj_add_style(volumeLabel, &style, 0); 
-    lv_obj_set_pos(volumeLabel, 64, 0);
-
-    lv_obj_add_style(sourceLabel, &style, 0); 
-    lv_obj_set_pos(sourceLabel, 32, 0);
+    lv_obj_set_pos(volumeLabel, 67, 0);
 
     lv_obj_add_style(presetLabel, &style, 0); 
 
     bluetoothLabel = lv_label_create(scr);
     lv_label_set_text(bluetoothLabel, LV_SYMBOL_BLUETOOTH);
     lv_obj_add_flag(bluetoothLabel, LV_OBJ_FLAG_HIDDEN);
+
+    sourceIcon = lv_img_create(lv_scr_act());
 }
 
 void animate_bluetooth(void *arg, int32_t value)

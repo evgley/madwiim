@@ -26,7 +26,6 @@ struct Display {
         int source = 0;
         int preset = 0;
     };
-    void setInfo(const Info& info);
     void setState(State s);
     void setVolume(int volume);
     void setSource(int source);
@@ -40,8 +39,9 @@ private:
 
     Info info;
     lv_obj_t* volumeLabel;
-    lv_obj_t* sourceLabel;
     lv_obj_t* presetLabel;
+    lv_obj_t* sourceIcon;
+    lv_img_dsc_t sourceIconDsc;
     lv_obj_t* bluetoothLabel;
     lv_obj_t* customLabel;
 

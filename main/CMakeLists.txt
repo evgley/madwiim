@@ -3,4 +3,10 @@ idf_component_register(SRCS "settings_storage.cpp" "main.cpp" "madbit.cpp" "font
                     SRCS "app_spp_msg_set.c"
                     SRCS "console_uart.c"
                     EMBED_TXTFILES "init.html"
+                    EMBED_FILES "icons/usb_audio.png"
+                    EMBED_FILES "icons/usb_flash.png"
+                    EMBED_FILES "icons/bluetooth.png"
+                    EMBED_FILES "icons/toslink.png"
+                    EMBED_FILES "icons/coax.png"
+                    EMBED_FILES "icons/analog.png"
                     INCLUDE_DIRS ".")
